@@ -3,43 +3,43 @@ description: SDLC workflow from architecture planning through merge
 steps:
   - id: dev_architect_plan
     agent: dev_architect
-    prompt: sdlc_agents_poc/prompts/01_planning.md
+    prompt: src/agent_orchestrator/prompts/01_planning.md
     needs: []
     next_on_success: [coding_impl]
 
   - id: coding_impl
     agent: coding
-    prompt: sdlc_agents_poc/prompts/02_coding.md
+    prompt: src/agent_orchestrator/prompts/02_coding.md
     needs: [dev_architect_plan]
     next_on_success: [test_creator]
 
   - id: test_creator
     agent: e2e_test_writer
-    prompt: sdlc_agents_poc/prompts/03_e2e.md
+    prompt: src/agent_orchestrator/prompts/03_e2e.md
     needs: [coding_impl]
     next_on_success: [code_review]
 
   - id: code_review
     agent: code_review
-    prompt: sdlc_agents_poc/prompts/06_code_review.md
+    prompt: src/agent_orchestrator/prompts/06_code_review.md
     needs: [test_creator]
     next_on_success: [manual_testing]
 
   - id: manual_testing
     agent: manual_testing
-    prompt: sdlc_agents_poc/prompts/04_manual.md
+    prompt: src/agent_orchestrator/prompts/04_manual.md
     needs: [code_review]
     human_in_the_loop: true
     next_on_success: [docs_update]
 
   - id: docs_update
     agent: docs_updater
-    prompt: sdlc_agents_poc/prompts/05_docs.md
+    prompt: src/agent_orchestrator/prompts/05_docs.md
     needs: [manual_testing]
     next_on_success: [merge_pr]
 
   - id: merge_pr
     agent: pr_manager
-    prompt: sdlc_agents_poc/prompts/07_pr_manager.md
+    prompt: src/agent_orchestrator/prompts/07_pr_manager.md
     needs: [docs_update]
     next_on_success: []

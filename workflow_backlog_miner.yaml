@@ -3,12 +3,12 @@ description: Identify documentation misalignments and tech debt for backlog groo
 steps:
   - id: architect_repo_review
     agent: backlog_architect
-    prompt: sdlc_agents_poc/prompts/08_architect_repo_review.md
+    prompt: src/agent_orchestrator/prompts/08_architect_repo_review.md
     needs: []
     next_on_success: [tech_debt_audit]
 
   - id: tech_debt_audit
     agent: tech_debt_miner
-    prompt: sdlc_agents_poc/prompts/09_tech_debt_miner.md
+    prompt: src/agent_orchestrator/prompts/09_tech_debt_miner.md
     needs: [architect_repo_review]
     next_on_success: []
