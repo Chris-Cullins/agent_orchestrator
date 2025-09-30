@@ -6,7 +6,7 @@ A production-ready, file-driven orchestrator for chaining SDLC agents via run re
 
 ### Prerequisites
 
-1. **Python Environment**: Python 3.8+ with virtual environment support
+1. **Python Environment**: Python 3.10+ with virtual environment support
 2. **AI Agent Platform**: Access to `codex exec` or similar AI agent execution platform
 3. **Target Repository**: A Git repository where you want to run the SDLC pipeline
 
@@ -23,6 +23,12 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Install the agent_orchestrator package
+pip install -e .
+
+# Configure PATH for codex (if using Homebrew installation)
+export PATH="/opt/homebrew/bin:/opt/homebrew/Cellar/node/24.5.0/bin:$PATH"
 ```
 
 ### Step 2: Choose Your Workflow
@@ -37,7 +43,15 @@ Select one of the predefined workflows or create your own:
 
 You have two options for running agents:
 
-#### Option A: Using the Bundled Wrapper (Recommended)
+#### Option A: Using the Real Codex Exec (Recommended)
+```bash
+python -m agent_orchestrator run \
+  --repo /path/to/your/target/repository \
+  --workflow workflow.yaml \
+  --wrapper real_codex_wrapper.py
+```
+
+#### Option B: Using the Bundled Mock Wrapper (For Testing)
 ```bash
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
