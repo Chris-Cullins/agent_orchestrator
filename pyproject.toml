@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-orchestrator"
+version = "0.1.0"
+description = "File-driven orchestrator for SDLC agent workflows"
+readme = "README.md"
+authors = [{ name = "SDLC Agents" }]
+requires-python = ">=3.10"
+dependencies = [
+  "pyyaml",
+  "jsonschema",
+]
+
+[project.scripts]
+agent-orchestrator = "agent_orchestrator.cli:main"

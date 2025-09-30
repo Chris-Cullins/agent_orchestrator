@@ -1,0 +1,21 @@
+{
+  "schema": "run_report@v0",
+  "run_id": "fbabd3d4",
+  "step_id": "code",
+  "agent": "coding",
+  "status": "COMPLETED",
+  "started_at": "2025-09-30T21:40:50Z",
+  "ended_at": "2025-09-30T21:40:50Z",
+  "artifacts": [
+    "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/artifacts/fbabd3d4__code/artifact.txt"
+  ],
+  "metrics": {
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "duration_ms": 0
+  },
+  "logs": [
+    "Simulated agent run completed."
+  ],
+  "next_suggested_steps": []
+}

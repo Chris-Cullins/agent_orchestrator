@@ -1,0 +1,52 @@
+
+name: default
+description: Minimal SDLC pipeline with chained agents
+steps:
+  - id: plan
+    agent: work_planner
+    prompt: prompts/01_planning.md
+    needs: []
+    next_on_success: [code]
+
+  - id: code
+    agent: coding
+    prompt: prompts/02_coding.md
+    needs: [plan]
+    next_on_success: [e2e]
+
+  - id: e2e
+    agent: e2e_test_writer
+    prompt: prompts/03_e2e.md
+    needs: [code]
+    # Example gate placeholders you can later back with real CI checks or PR statuses
+    gates:
+      - ci.tests: passed
+    next_on_success: [manual]
+
+  - id: manual
+    agent: manual_testing
+    prompt: prompts/04_manual.md
+    needs: [e2e]
+    human_in_the_loop: true
+    next_on_success: [docs, review]
+
+  - id: docs
+    agent: docs_updater
+    prompt: prompts/05_docs.md
+    needs: [manual]
+    next_on_success: [pr]
+
+  - id: review
+    agent: code_review
+    prompt: prompts/06_code_review.md
+    needs: [manual]
+    next_on_success: [pr]
+
+  - id: pr
+    agent: pr_manager
+    prompt: prompts/07_pr_manager.md
+    needs: [docs, review]
+    merge_conditions:
+      - all_checks_passed
+      - approval_count>=1
+    next_on_success: []

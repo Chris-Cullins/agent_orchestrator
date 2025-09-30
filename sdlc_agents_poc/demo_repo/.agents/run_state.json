@@ -1,0 +1,127 @@
+{
+  "run_id": "49fcac82",
+  "workflow_name": "default",
+  "repo_dir": "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo",
+  "reports_dir": "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/run_reports",
+  "manual_inputs_dir": "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/run_inputs",
+  "created_at": "2025-09-30T21:28:25.661747Z",
+  "updated_at": "2025-09-30T22:06:48.726527Z",
+  "steps": {
+    "plan": {
+      "status": "COMPLETED",
+      "attempts": 1,
+      "report_path": "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/run_reports/49fcac82__plan.json",
+      "started_at": "2025-09-30T21:28:25.661989Z",
+      "ended_at": "2025-09-30T21:28:26Z",
+      "last_error": null,
+      "artifacts": [
+        "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/artifacts/49fcac82__plan/artifact.txt"
+      ],
+      "metrics": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "duration_ms": 0
+      },
+      "logs": [
+        "Simulated agent run completed."
+      ],
+      "manual_input_path": null
+    },
+    "code": {
+      "status": "COMPLETED",
+      "attempts": 1,
+      "report_path": "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/run_reports/49fcac82__code.json",
+      "started_at": "2025-09-30T21:28:27.678098Z",
+      "ended_at": "2025-09-30T21:28:28Z",
+      "last_error": null,
+      "artifacts": [
+        "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/artifacts/49fcac82__code/artifact.txt"
+      ],
+      "metrics": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "duration_ms": 0
+      },
+      "logs": [
+        "Simulated agent run completed."
+      ],
+      "manual_input_path": null
+    },
+    "e2e": {
+      "status": "COMPLETED",
+      "attempts": 1,
+      "report_path": "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/run_reports/49fcac82__e2e.json",
+      "started_at": "2025-09-30T21:28:28.694265Z",
+      "ended_at": "2025-09-30T21:28:29Z",
+      "last_error": null,
+      "artifacts": [
+        "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/artifacts/49fcac82__e2e/artifact.txt"
+      ],
+      "metrics": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "duration_ms": 0
+      },
+      "logs": [
+        "Simulated agent run completed."
+      ],
+      "manual_input_path": null
+    },
+    "manual": {
+      "status": "WAITING_ON_HUMAN",
+      "attempts": 1,
+      "report_path": "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/run_reports/49fcac82__manual.json",
+      "started_at": "2025-09-30T21:28:29.709812Z",
+      "ended_at": "2025-09-30T21:28:30Z",
+      "last_error": null,
+      "artifacts": [
+        "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/artifacts/49fcac82__manual/artifact.txt"
+      ],
+      "metrics": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "duration_ms": 0
+      },
+      "logs": [
+        "Simulated agent run completed."
+      ],
+      "manual_input_path": "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/run_inputs/49fcac82__manual.json"
+    },
+    "docs": {
+      "status": "PENDING",
+      "attempts": 0,
+      "report_path": null,
+      "started_at": null,
+      "ended_at": null,
+      "last_error": null,
+      "artifacts": [],
+      "metrics": {},
+      "logs": [],
+      "manual_input_path": null
+    },
+    "review": {
+      "status": "PENDING",
+      "attempts": 0,
+      "report_path": null,
+      "started_at": null,
+      "ended_at": null,
+      "last_error": null,
+      "artifacts": [],
+      "metrics": {},
+      "logs": [],
+      "manual_input_path": null
+    },
+    "pr": {
+      "status": "PENDING",
+      "attempts": 0,
+      "report_path": null,
+      "started_at": null,
+      "ended_at": null,
+      "last_error": null,
+      "artifacts": [],
+      "metrics": {},
+      "logs": [],
+      "manual_input_path": null
+    }
+  }
+}

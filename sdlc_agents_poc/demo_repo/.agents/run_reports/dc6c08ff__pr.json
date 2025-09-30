@@ -1,0 +1,21 @@
+{
+  "schema": "run_report@v0",
+  "run_id": "dc6c08ff",
+  "step_id": "pr",
+  "agent": "pr_manager",
+  "status": "COMPLETED",
+  "started_at": "2025-09-30T21:28:30Z",
+  "ended_at": "2025-09-30T21:28:30Z",
+  "artifacts": [
+    "/Users/chriscullins/src/agent_orchestrator/sdlc_agents_poc/demo_repo/.agents/artifacts/dc6c08ff__pr/artifact.txt"
+  ],
+  "metrics": {
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "duration_ms": 0
+  },
+  "logs": [
+    "Simulated agent run completed."
+  ],
+  "next_suggested_steps": []
+}
