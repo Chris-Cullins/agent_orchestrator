@@ -87,7 +87,34 @@ python -m agent_orchestrator run \
 
 ### Step 4: Basic Usage Examples
 
-#### Run Complete SDLC Pipeline
+#### Quick Start: Use the Convenience Script
+
+For easy workflow execution, use the provided bash script:
+
+```bash
+# Run on current directory with default workflow (backlog_miner)
+./src/agent_orchestrator/scripts/run_workflow.sh
+
+# Run on a specific repository
+./src/agent_orchestrator/scripts/run_workflow.sh --repo /path/to/your/project
+
+# Use a different workflow
+./src/agent_orchestrator/scripts/run_workflow.sh --workflow workflow.yaml
+
+# All options
+./src/agent_orchestrator/scripts/run_workflow.sh \
+  --repo /path/to/your/project \
+  --workflow workflow.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
+```
+
+**Script Options:**
+- `--repo PATH` - Path to target repository (default: current directory)
+- `--workflow PATH` - Path to workflow YAML file (default: workflow_backlog_miner.yaml)
+- `--wrapper PATH` - Path to agent wrapper script (default: claude_wrapper.py)
+- `--help` - Show help message
+
+#### Manual Execution: Complete SDLC Pipeline
 ```bash
 # Full development workflow on your repository using Claude
 python -m agent_orchestrator run \
@@ -98,7 +125,7 @@ python -m agent_orchestrator run \
   --log-level INFO
 ```
 
-#### Run Architecture and Tech Debt Analysis
+#### Manual Execution: Architecture and Tech Debt Analysis
 ```bash
 # Analyze your codebase for technical debt and architecture misalignments
 python -m agent_orchestrator run \
@@ -287,8 +314,6 @@ steps:
 
 ## Project Layout
 
-## Project Layout
-
 - `src/agent_orchestrator/` — Main package code
   - `orchestrator.py` — Core workflow execution engine
   - `runner.py` — Agent process management
@@ -300,11 +325,12 @@ steps:
   - `gating.py` — Conditional workflow progression
   - `prompts/` — Standard agent prompt templates
   - `wrappers/` — Agent execution adapters
+  - `scripts/` — Utility scripts
+    - `run_workflow.sh` — Convenience script for running workflows
 - `workflow.yaml` — Complete SDLC pipeline definition
 - `workflow_backlog_miner.yaml` — Architecture and tech debt analysis workflow
 - `requirements.txt` — Python dependencies
 - `README.md` — This comprehensive guide
-- `sdlc_agents_poc/` — Original proof-of-concept (kept for reference)
 
 ## Getting Started with Real Projects
 
