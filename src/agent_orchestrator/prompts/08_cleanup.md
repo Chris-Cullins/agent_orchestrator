@@ -7,6 +7,8 @@ Clean up all temporary files and artifacts created during this workflow run to p
 
 1. **Remove temporary workflow files:**
    - Delete `PLAN.md` (planning document from step 1)
+   - Delete the tasks.yaml file from this run.
+   - Delete any left over REVIEW.md file from the code review step.
    - Delete any other temporary files created during the workflow
    - Look for files with temporary naming patterns (e.g., `.tmp`, `.bak`, etc.)
 

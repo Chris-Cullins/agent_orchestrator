@@ -1,0 +1,26 @@
+name: pr_review_and_fix
+description: Automated PR review, fix, and merge workflow
+steps:
+  - id: review_open_prs
+    agent: pr_reviewer
+    prompt: src/agent_orchestrator/prompts/11_pr_reviewer.md
+    needs: []
+    next_on_success: [create_todos]
+
+  - id: create_todos
+    agent: todo_creator
+    prompt: src/agent_orchestrator/prompts/12_todo_creator.md
+    needs: [review_open_prs]
+    next_on_success: [fix_pr_issues]
+
+  - id: fix_pr_issues
+    agent: pr_fixer
+    prompt: src/agent_orchestrator/prompts/13_pr_fixer.md
+    needs: [create_todos]
+    next_on_success: [merge_prs]
+
+  - id: merge_prs
+    agent: pr_merger
+    prompt: src/agent_orchestrator/prompts/14_pr_merger.md
+    needs: [fix_pr_issues]
+    next_on_success: []
