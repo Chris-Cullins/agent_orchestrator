@@ -170,6 +170,26 @@ python -m agent_orchestrator run \
   --poll-interval 2.0
 ```
 
+#### Run with Automated Git Worktree Isolation
+```bash
+python -m agent_orchestrator run \
+  --repo /path/to/your/project \
+  --workflow workflow.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
+  --git-worktree \
+  --git-worktree-ref main \
+  --git-worktree-keep
+```
+
+**Git worktree flags:**
+- `--git-worktree` – create an isolated worktree under `<repo>/.agents/worktrees/` for the run.
+- `--git-worktree-ref` – optional ref to base the worktree on (defaults to `HEAD`).
+- `--git-worktree-branch` – override the auto-generated branch name.
+- `--git-worktree-root` – place worktrees somewhere other than `.agents/worktrees`.
+- `--git-worktree-keep` – keep the worktree instead of deleting it after the run.
+
+When cleanup is enabled (the default), run artifacts are copied to `<repo>/.agents/runs/<run_id>/` before the temporary worktree is removed so you can still review outputs.
+
 ### Step 5: Understanding Output and Artifacts
 
 When you run the orchestrator, it creates a structured output in your target repository:
@@ -188,8 +208,10 @@ your-target-repo/
 │   │   └── MANUAL_TEST_PLAN.md
 │   ├── review/                      # Code review reports
 │   │   └── REVIEW.md
-│   └── pr/                          # PR metadata
-│       └── metadata.json
+│   ├── pr/                          # PR metadata
+│   │   └── metadata.json
+│   └── runs/                        # Archived runs when worktrees are cleaned up
+│       └── <run_id>/                # Copied logs and reports from the run
 ├── backlog/                         # Strategic planning outputs
 │   ├── architecture_alignment.md
 │   └── tech_debt.md

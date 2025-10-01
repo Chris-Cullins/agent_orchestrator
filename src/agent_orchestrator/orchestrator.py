@@ -28,6 +28,7 @@ class Orchestrator:
         max_attempts: int = 2,
         pause_for_human_input: bool = False,
         logger: Optional[logging.Logger] = None,
+        run_id: Optional[str] = None,
     ) -> None:
         self._workflow = workflow
         self._workflow_root = workflow_root
@@ -51,7 +52,7 @@ class Orchestrator:
         if self._pause_for_human:
             self._manual_inputs_dir.mkdir(parents=True, exist_ok=True)
 
-        run_id = uuid.uuid4().hex[:8]
+        run_id = run_id or uuid.uuid4().hex[:8]
         self._state = RunState(
             run_id=run_id,
             workflow_name=workflow.name,
@@ -277,6 +278,8 @@ def build_default_runner(
     wrapper: Path,
     default_env: Optional[dict[str, str]] = None,
     default_args: Optional[list[str]] = None,
+    logs_dir: Optional[Path] = None,
+    workdir: Optional[Path] = None,
 ) -> StepRunner:
     template = ExecutionTemplate(
         "{python} {wrapper} --run-id {run_id} --step-id {step_id} --agent {agent} "
@@ -285,9 +288,9 @@ def build_default_runner(
     return StepRunner(
         execution_template=template,
         repo_dir=repo_dir,
-        logs_dir=repo_dir / ".agents" / "logs",
+        logs_dir=logs_dir or (repo_dir / ".agents" / "logs"),
+        workdir=workdir or repo_dir,
         template_context={"python": sys.executable, "wrapper": wrapper},
         default_env=default_env,
         default_args=default_args,
     )
-
