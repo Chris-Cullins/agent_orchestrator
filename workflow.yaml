@@ -42,4 +42,10 @@ steps:
     agent: pr_manager
     prompt: src/agent_orchestrator/prompts/07_pr_manager.md
     needs: [docs_update]
+    next_on_success: [cleanup]
+
+  - id: cleanup
+    agent: cleanup
+    prompt: src/agent_orchestrator/prompts/08_cleanup.md
+    needs: [merge_pr]
     next_on_success: []
