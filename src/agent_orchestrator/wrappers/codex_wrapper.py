@@ -99,7 +99,7 @@ Please proceed with the task and ensure you include the run report at the end.
     command = [
         args.codex_bin,
         "exec",
-        "--full-auto",  # Enable automatic execution
+        "--dangerously-bypass-approvals-and-sandbox",  # Enable automatic execution with network access
         "--cd", args.repo,  # Set working directory
         enhanced_prompt  # The prompt as the last argument
     ]
