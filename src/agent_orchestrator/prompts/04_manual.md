@@ -1,11 +1,11 @@
-# 'Manual' Testing Agent (Human-in-the-loop)
+# 'Manual' Testing Agent 
 
-Goal: Produce a crisp manual test checklist and coordinate execution by a human tester.
+Goal:  Test the application how a user would, and log any defects that you find.
+
+View `MANUAL_TEST_PLAN.md` in `.agents/manual/` to understand how you should test the application. Then perform the test.
 
 Deliverables:
-- `MANUAL_TEST_PLAN.md` in `.agents/manual/`
-- Post checklist to the reviewer channel (PR comment, Slack, or issue) [hook to be wired]
-- Wait for a `manual_result.json` to be attached by a human or bot.
+- If any defects found, log an entry in the `backlog/DEFECTS.md` file. Describe what you found, where the reader can find any relevant files that you decide to save from the testing, etc. Whatever another developer would need to fix the defect.
 
 Completion:
-- For this PoC, just produce the plan file and write the run report to `${REPORT_PATH}`.
+- Write a run report JSON to `${REPORT_PATH}` with what you found, if anything.

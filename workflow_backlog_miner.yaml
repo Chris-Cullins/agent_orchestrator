@@ -11,4 +11,10 @@ steps:
     agent: tech_debt_miner
     prompt: src/agent_orchestrator/prompts/09_tech_debt_miner.md
     needs: [architect_repo_review]
+    next_on_success: [consolidate_todos]
+
+  - id: consolidate_todos
+    agent: backlog_consolidator
+    prompt: src/agent_orchestrator/prompts/10_backlog_consolidator.md
+    needs: [architect_repo_review, tech_debt_audit]
     next_on_success: []
