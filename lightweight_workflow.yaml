@@ -1,0 +1,38 @@
+name: dev_architect_pipeline
+description: SDLC workflow from architecture planning through merge
+steps:
+  - id: dev_architect_plan
+    agent: dev_architect
+    prompt: src/agent_orchestrator/prompts/01_planning.md
+    needs: []
+    next_on_success: [coding_impl]
+
+  - id: coding_impl
+    agent: coding
+    prompt: src/agent_orchestrator/prompts/02_coding.md
+    needs: [dev_architect_plan]
+    next_on_success: [code_review]
+
+  - id: code_review
+    agent: code_review
+    prompt: src/agent_orchestrator/prompts/06_code_review.md
+    needs: [coding_impl]
+    next_on_success: [docs_update]
+
+  - id: docs_update
+    agent: docs_updater
+    prompt: src/agent_orchestrator/prompts/05_docs.md
+    needs: [code_review]
+    next_on_success: [merge_pr]
+
+  - id: merge_pr
+    agent: pr_manager
+    prompt: src/agent_orchestrator/prompts/07_pr_manager.md
+    needs: [docs_update]
+    next_on_success: [cleanup]
+
+  - id: cleanup
+    agent: cleanup
+    prompt: src/agent_orchestrator/prompts/08_cleanup.md
+    needs: [merge_pr]
+    next_on_success: []

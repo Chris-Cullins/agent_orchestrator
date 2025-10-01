@@ -6,7 +6,7 @@ A production-ready, file-driven orchestrator for chaining SDLC agents via run re
 
 ### Prerequisites
 
-1. **Python Environment**: Python 3.10+ with virtual environment support
+1. **Python Environment**: Python 3.10+ (Python 3.13+ fully supported) with virtual environment support
 2. **AI Agent Platform**: Access to `codex exec` or similar AI agent execution platform
 3. **Target Repository**: A Git repository where you want to run the SDLC pipeline
 
