@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -11,7 +11,7 @@ ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 def utc_now() -> str:
     """Return an ISO-8601 timestamp with UTC timezone."""
-    return datetime.utcnow().strftime(ISO_FORMAT)
+    return datetime.now(timezone.utc).strftime(ISO_FORMAT)
 
 
 class StepStatus(str, Enum):

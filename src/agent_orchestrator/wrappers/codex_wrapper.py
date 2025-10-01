@@ -10,7 +10,7 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -20,7 +20,7 @@ ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 
 def utc_timestamp() -> str:
-    return datetime.utcnow().strftime(ISO_FORMAT)
+    return datetime.now(timezone.utc).strftime(ISO_FORMAT)
 
 
 def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, list[str]]:
