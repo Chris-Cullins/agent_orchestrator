@@ -11,6 +11,14 @@ from .reporting import RunReportReader
 from .runner import ExecutionTemplate, StepRunner
 from .state import RunStatePersister
 from .workflow import WorkflowLoadError, load_workflow
+from .git_worktree import (
+    GitWorktreeError,
+    GitWorktreeManager,
+    persist_worktree_outputs,
+)
+
+
+_LOG = logging.getLogger(__name__)
 
 
 def parse_env(env_pairs: Optional[list[str]]) -> Dict[str, str]:
@@ -60,11 +68,18 @@ def build_runner(
         wrapper=wrapper_path,
         default_env=base_env,
         default_args=wrapper_args,
+        logs_dir=logs_dir,
+        workdir=workdir,
     )
 
 
 def run_from_args(args: argparse.Namespace) -> None:
     repo_dir = Path(args.repo).expanduser().resolve()
+    run_repo_dir = repo_dir
+    repo_root_for_outputs = repo_dir
+    worktree_manager: Optional[GitWorktreeManager] = None
+    worktree_handle = None
+    run_id_override: Optional[str] = None
     workflow_path = Path(args.workflow).expanduser().resolve()
     workflow_root = workflow_path.parent
 
@@ -72,6 +87,34 @@ def run_from_args(args: argparse.Namespace) -> None:
         workflow = load_workflow(workflow_path)
     except WorkflowLoadError as exc:
         raise SystemExit(f"Workflow error: {exc}") from exc
+
+    if args.git_worktree:
+        if args.workdir:
+            raise SystemExit("--workdir cannot be used together with --git-worktree")
+
+        worktree_manager = GitWorktreeManager(repo_dir)
+        repo_root_for_outputs = worktree_manager.repo_root
+
+        worktree_root: Optional[Path] = None
+        if args.git_worktree_root:
+            candidate = Path(args.git_worktree_root).expanduser()
+            if not candidate.is_absolute():
+                candidate = (repo_root_for_outputs / candidate).resolve()
+            else:
+                candidate = candidate.resolve()
+            worktree_root = candidate
+
+        try:
+            worktree_handle = worktree_manager.create(
+                root=worktree_root,
+                ref=args.git_worktree_ref,
+                branch=args.git_worktree_branch,
+            )
+        except GitWorktreeError as exc:
+            raise SystemExit(f"Git worktree error: {exc}") from exc
+
+        run_repo_dir = worktree_handle.path
+        run_id_override = worktree_handle.run_id
 
     gate_evaluator = CompositeGateEvaluator(AlwaysOpenGateEvaluator())
     if args.gate_state_file:
@@ -87,37 +130,70 @@ def run_from_args(args: argparse.Namespace) -> None:
 
     state_file = Path(args.state_file)
     if not state_file.is_absolute():
-        state_file = repo_dir / state_file
+        state_file = run_repo_dir / state_file
     state_persister = RunStatePersister(state_file)
 
     base_env = parse_env(args.env)
-    try:
-        runner = build_runner(
-            repo_dir=repo_dir,
-            wrapper=args.wrapper,
-            command_template=args.command_template,
-            logs_dir=Path(args.logs_dir).expanduser().resolve() if args.logs_dir else None,
-            workdir=Path(args.workdir).expanduser().resolve() if args.workdir else None,
-            base_env=base_env,
-            wrapper_args=args.wrapper_arg,
-        )
-    except (ValueError, FileNotFoundError) as exc:
-        raise SystemExit(str(exc)) from exc
+    resolved_logs_dir = Path(args.logs_dir).expanduser().resolve() if args.logs_dir else None
+    if args.git_worktree and not resolved_logs_dir:
+        resolved_logs_dir = repo_root_for_outputs / ".agents" / "logs"
 
-    orchestrator = Orchestrator(
-        workflow=workflow,
-        workflow_root=workflow_root,
-        repo_dir=repo_dir,
-        report_reader=report_reader,
-        state_persister=state_persister,
-        runner=runner,
-        gate_evaluator=gate_evaluator,
-        poll_interval=args.poll_interval,
-        max_attempts=args.max_attempts,
-        pause_for_human_input=args.pause_for_human_input,
-        logger=logging.getLogger("agent_orchestrator"),
-    )
-    orchestrator.run()
+    resolved_workdir = Path(args.workdir).expanduser().resolve() if args.workdir else None
+    orchestrator: Optional[Orchestrator] = None
+    try:
+        try:
+            runner = build_runner(
+                repo_dir=run_repo_dir,
+                wrapper=args.wrapper,
+                command_template=args.command_template,
+                logs_dir=resolved_logs_dir,
+                workdir=resolved_workdir,
+                base_env=base_env,
+                wrapper_args=args.wrapper_arg,
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            raise SystemExit(str(exc)) from exc
+
+        orchestrator = Orchestrator(
+            workflow=workflow,
+            workflow_root=workflow_root,
+            repo_dir=run_repo_dir,
+            report_reader=report_reader,
+            state_persister=state_persister,
+            runner=runner,
+            gate_evaluator=gate_evaluator,
+            poll_interval=args.poll_interval,
+            max_attempts=args.max_attempts,
+            pause_for_human_input=args.pause_for_human_input,
+            logger=logging.getLogger("agent_orchestrator"),
+            run_id=run_id_override,
+        )
+
+        orchestrator.run()
+    finally:
+        if worktree_manager and worktree_handle:
+            run_id = orchestrator.run_id if orchestrator else worktree_handle.run_id
+            if args.git_worktree_keep:
+                _LOG.info(
+                    "Git worktree preserved at %s (branch %s)",
+                    worktree_handle.path,
+                    worktree_handle.branch,
+                )
+            else:
+                try:
+                    destination = persist_worktree_outputs(
+                        worktree_handle.path,
+                        worktree_handle.root_repo,
+                        run_id,
+                    )
+                    _LOG.info("Copied worktree artifacts to %s", destination)
+                except (OSError, shutil.Error) as exc:  # pragma: no cover - defensive
+                    _LOG.warning("Failed to persist worktree artifacts: %s", exc)
+
+                try:
+                    worktree_manager.remove(worktree_handle)
+                except GitWorktreeError as exc:
+                    raise SystemExit(f"Failed to remove git worktree: {exc}") from exc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -164,6 +240,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="Environment variables to inject into agent runs (format KEY=VALUE)",
     )
 
+    worktree_group = run_parser.add_argument_group("git worktree automation")
+    worktree_group.add_argument(
+        "--git-worktree",
+        action="store_true",
+        help="Create an isolated git worktree for this run",
+    )
+    worktree_group.add_argument(
+        "--git-worktree-ref",
+        help="Git ref to base the worktree on (default: HEAD)",
+    )
+    worktree_group.add_argument(
+        "--git-worktree-branch",
+        help="Branch name to create for the worktree (default: agents/run-<id>)",
+    )
+    worktree_group.add_argument(
+        "--git-worktree-root",
+        help="Directory to place worktrees (default: <repo>/.agents/worktrees)",
+    )
+    worktree_group.add_argument(
+        "--git-worktree-keep",
+        action="store_true",
+        help="Keep the worktree after the workflow finishes",
+    )
+
     return parser
 
 
@@ -184,4 +284,3 @@ def main(argv: Optional[list[str]] = None) -> None:
 
 if __name__ == "__main__":
     main()
-
