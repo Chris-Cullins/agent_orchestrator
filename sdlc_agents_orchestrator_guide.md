@@ -185,7 +185,7 @@ class StepRuntime:   # dynamic state while running
 - Computes `report_path = <repo>/.agents/run_reports/<run_id>__<step_id>.json`
 - `subprocess.Popen` a wrapper:
   ```bash
-  python scripts/codex_exec_wrapper.py \
+  python src/agent_orchestrator/wrappers/codex_wrapper.py \
     --run-id <run_id> --step-id <step_id> \
     --agent <agent> --prompt <prompt_path> \
     --repo <repo_dir> --report <report_path>
@@ -230,7 +230,7 @@ if all_done or (any_failed and nothing_left):
 
 ## Swap In Your Real `codex exec`
 
-Point the orchestrator at `src/agent_orchestrator/wrappers/codex_exec_wrapper.py` for a production-ready shim.
+Point the orchestrator at `src/agent_orchestrator/wrappers/codex_wrapper.py` for a production-ready shim.
 It shells out to `codex exec`, forwards extra CLI arguments, streams logs, and guarantees a compliant run
 report even when the agent forgets to emit one. Example:
 
@@ -238,7 +238,7 @@ report even when the agent forgets to emit one. Example:
 python -m agent_orchestrator run \
   --repo /path/to/repo \
   --workflow workflows/default.yaml \
-  --wrapper src/agent_orchestrator/wrappers/codex_exec_wrapper.py \
+  --wrapper codex_wrapper.py \
   --wrapper-arg --profile \
   --wrapper-arg prod
 ```
@@ -309,15 +309,15 @@ src/
     gating.py
     state.py
     wrappers/
-      codex_exec_wrapper.py
+      claude_wrapper.py
+      codex_wrapper.py
+      mock_wrapper.py
 README.md
 pyproject.toml
 requirements.txt
 sdlc_agents_poc/
   orchestrator.py
   workflow.yaml
-  scripts/
-    codex_exec_wrapper.py
   schemas/
     run_report.schema.json
   prompts/
