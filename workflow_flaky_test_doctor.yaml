@@ -1,0 +1,35 @@
+name: flaky_test_doctor
+description: Mines CI history for intermittent failures, isolates flakes, rewrites tests, and quarantines stubborn specs.
+steps:
+  - id: mine_ci_history
+    agent: ci_history_miner
+    prompt: src/agent_orchestrator/prompts/15_ci_history_miner.md
+    needs: []
+    next_on_success: [isolate_flakes]
+    timeout: 600
+    max_attempts: 2
+
+  - id: isolate_flakes
+    agent: flake_analyzer
+    prompt: src/agent_orchestrator/prompts/16_flake_analyzer.md
+    needs: [mine_ci_history]
+    next_on_success: [rewrite_tests]
+    timeout: 900
+    max_attempts: 2
+
+  - id: rewrite_tests
+    agent: test_rewriter
+    prompt: src/agent_orchestrator/prompts/17_test_rewriter.md
+    needs: [isolate_flakes]
+    next_on_success: [quarantine_stubborn]
+    timeout: 1200
+    max_attempts: 1
+    human_in_the_loop: true
+
+  - id: quarantine_stubborn
+    agent: test_quarantine_manager
+    prompt: src/agent_orchestrator/prompts/18_test_quarantine_manager.md
+    needs: [rewrite_tests]
+    next_on_success: []
+    timeout: 300
+    max_attempts: 2
