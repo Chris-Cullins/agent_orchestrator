@@ -25,7 +25,7 @@ Each agent run writes a **Run Report** JSON file that the orchestrator monitors 
 
 ## What You Get
 
-- **A tiny orchestrator** that reads `workflow.yaml`, launches a wrapper (your `codex exec` shim), and watches for **Run Report** files.
+- **A tiny orchestrator** that reads `src/agent_orchestrator/workflows/workflow.yaml`, launches a wrapper (your `codex exec` shim), and watches for **Run Report** files.
 - **Prompt templates** for the agents you listed (planner, coding, e2e, manual testing, docs, code review, PR manager).
 - **A single completion contract**: agents write `run_report.json` files to the repo under `./.agents/run_reports/`.
 - **A working demo repo** so you can run end‑to‑end immediately.
@@ -39,7 +39,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # Run the orchestrator against the demo repo and default workflow
-python -m agent_orchestrator run --repo ./demo_repo --workflow ./workflow.yaml
+python -m agent_orchestrator run --repo ./demo_repo --workflow ./src/agent_orchestrator/workflows/workflow.yaml
 ```
 
 You should see steps run in order and `*.json` appear in `demo_repo/.agents/run_reports/`.
@@ -81,7 +81,7 @@ plan → code → e2e → manual → docs ┐
                       manual → review ┘
 ```
 
-**`workflow.yaml` (excerpt):**
+**`src/agent_orchestrator/workflows/workflow.yaml` (excerpt):**
 ```yaml
 name: default
 description: Minimal SDLC pipeline with chained agents
@@ -317,7 +317,7 @@ pyproject.toml
 requirements.txt
 sdlc_agents_poc/
   orchestrator.py
-  workflow.yaml
+  src/agent_orchestrator/workflows/workflow.yaml
   schemas/
     run_report.schema.json
   prompts/

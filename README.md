@@ -36,8 +36,8 @@ export PATH="/opt/homebrew/bin:/opt/homebrew/Cellar/node/24.5.0/bin:$PATH"
 Select one of the predefined workflows or create your own:
 
 **Available Workflows:**
-- `workflow.yaml` - Complete SDLC pipeline (planning → coding → testing → review → docs → merge)
-- `workflow_backlog_miner.yaml` - Architecture review and tech debt analysis
+- `src/agent_orchestrator/workflows/workflow.yaml` - Complete SDLC pipeline (planning → coding → testing → review → docs → merge)
+- `src/agent_orchestrator/workflows/workflow_backlog_miner.yaml` - Architecture review and tech debt analysis
 
 ### Step 3: Configure Your AI Agent Platform
 
@@ -51,7 +51,7 @@ claude --version
 # Run with Claude (recommended for quality)
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
   --wrapper-arg --model \
   --wrapper-arg sonnet
@@ -65,7 +65,7 @@ codex --version
 # Run with Codex
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py
 ```
 
@@ -75,7 +75,7 @@ python -m agent_orchestrator run \
 # Use claude_wrapper.py or codex_wrapper.py instead
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
 ```
 
@@ -83,7 +83,7 @@ python -m agent_orchestrator run \
 ```bash
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --command-template "your-agent-runner --agent {agent} --prompt {prompt} --repo {repo} --output {report}"
 ```
 
@@ -121,18 +121,18 @@ For easy workflow execution, use the provided bash script:
 ./src/agent_orchestrator/scripts/run_workflow.sh --repo /path/to/your/project
 
 # Use a different workflow
-./src/agent_orchestrator/scripts/run_workflow.sh --workflow workflow.yaml
+./src/agent_orchestrator/scripts/run_workflow.sh --workflow src/agent_orchestrator/workflows/workflow.yaml
 
 # All options
 ./src/agent_orchestrator/scripts/run_workflow.sh \
   --repo /path/to/your/project \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
 ```
 
 **Script Options:**
 - `--repo PATH` - Path to target repository (default: current directory)
-- `--workflow PATH` - Path to workflow YAML file (default: workflow_backlog_miner.yaml)
+- `--workflow PATH` - Path to workflow YAML file (default: src/agent_orchestrator/workflows/workflow_backlog_miner.yaml)
 - `--wrapper PATH` - Path to agent wrapper script (default: claude_wrapper.py)
 - `--help` - Show help message
 
@@ -141,7 +141,7 @@ For easy workflow execution, use the provided bash script:
 # Full development workflow on your repository using Claude
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
   --pause-for-human-input \
   --log-level INFO
@@ -152,7 +152,7 @@ python -m agent_orchestrator run \
 # Analyze your codebase for technical debt and architecture misalignments
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
-  --workflow workflow_backlog_miner.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow_backlog_miner.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
 ```
 
@@ -160,7 +160,7 @@ python -m agent_orchestrator run \
 ```bash
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
   --env OPENAI_API_KEY=your-key \
   --env ENVIRONMENT=production \
@@ -174,7 +174,7 @@ python -m agent_orchestrator run \
 ```bash
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
   --git-worktree \
   --git-worktree-ref main \
@@ -227,7 +227,7 @@ Enable manual steps that require human input:
 ```bash
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
   --pause-for-human-input
 ```
@@ -247,7 +247,7 @@ echo '{"ci.tests": true, "security.scan": true}' > gates.json
 
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper codex_wrapper.py \
   --gate-state-file gates.json
 ```
@@ -256,7 +256,7 @@ python -m agent_orchestrator run \
 ```bash
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
   --workdir /tmp/agent-workspace \
   --logs-dir /var/log/agents \
@@ -371,8 +371,8 @@ steps:
   - `wrappers/` — Agent execution adapters
   - `scripts/` — Utility scripts
     - `run_workflow.sh` — Convenience script for running workflows
-- `workflow.yaml` — Complete SDLC pipeline definition
-- `workflow_backlog_miner.yaml` — Architecture and tech debt analysis workflow
+- `src/agent_orchestrator/workflows/workflow.yaml` — Complete SDLC pipeline definition
+- `src/agent_orchestrator/workflows/workflow_backlog_miner.yaml` — Architecture and tech debt analysis workflow
 - `requirements.txt` — Python dependencies
 - `README.md` — This comprehensive guide
 
@@ -386,7 +386,7 @@ cd path/to/agent_orchestrator
 
 python -m agent_orchestrator run \
   --repo ../ecommerce-site \
-  --workflow workflow_backlog_miner.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow_backlog_miner.yaml \
   --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
   --log-level INFO
 ```
@@ -400,7 +400,7 @@ git checkout -b feature/user-authentication
 cd path/to/agent_orchestrator
 python -m agent_orchestrator run \
   --repo ../your-project \
-  --workflow workflow.yaml \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
   --pause-for-human-input \
   --env FEATURE_DESCRIPTION="Add OAuth2 user authentication"

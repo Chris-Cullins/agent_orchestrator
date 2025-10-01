@@ -9,7 +9,7 @@ ORCHESTRATOR_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 # Default values
 REPO_PATH="${PWD}"
-WORKFLOW_PATH="${ORCHESTRATOR_ROOT}/workflow_backlog_miner.yaml"
+WORKFLOW_PATH="${ORCHESTRATOR_ROOT}/src/agent_orchestrator/workflows/workflow_backlog_miner.yaml"
 WRAPPER_PATH="${ORCHESTRATOR_ROOT}/src/agent_orchestrator/wrappers/claude_wrapper.py"
 
 # Parse command line arguments
@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --repo PATH       Path to target repository (default: current directory)"
-            echo "  --workflow PATH   Path to workflow YAML file (default: workflow_backlog_miner.yaml)"
+            echo "  --workflow PATH   Path to workflow YAML file (default: src/agent_orchestrator/workflows/workflow_backlog_miner.yaml)"
             echo "  --wrapper PATH    Path to agent wrapper script (default: claude_wrapper.py)"
             echo "  -h, --help        Show this help message"
             exit 0
