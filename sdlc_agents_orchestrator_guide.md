@@ -39,7 +39,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # Run the orchestrator against the demo repo and default workflow
-python orchestrator.py --repo ./demo_repo --workflow ./workflow.yaml
+python -m agent_orchestrator run --repo ./demo_repo --workflow ./workflow.yaml
 ```
 
 You should see steps run in order and `*.json` appear in `demo_repo/.agents/run_reports/`.
@@ -183,12 +183,12 @@ class StepRuntime:   # dynamic state while running
 **`_launch(step_id)`**
 - Marks step `RUNNING`, increments attempts
 - Computes `report_path = <repo>/.agents/run_reports/<run_id>__<step_id>.json`
-- `subprocess.Popen` a wrapper:
+- `subprocess.Popen` invokes the wrapper (configurable via CLI):
   ```bash
-  python src/agent_orchestrator/wrappers/codex_wrapper.py \
-    --run-id <run_id> --step-id <step_id> \
-    --agent <agent> --prompt <prompt_path> \
-    --repo <repo_dir> --report <report_path>
+  python -m agent_orchestrator run \
+    --repo <repo_dir> \
+    --workflow <workflow_path> \
+    --wrapper <wrapper_path
   ```
 - Non‑blocking; multiple independent steps can run concurrently
 
