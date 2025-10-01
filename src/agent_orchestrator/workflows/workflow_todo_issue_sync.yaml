@@ -1,0 +1,14 @@
+name: todo_issue_sync
+description: Convert backlog TODO items into GitHub issues and annotate the backlog with links.
+steps:
+  - id: create_github_issues
+    agent: todo_issue_syncer
+    prompt: src/agent_orchestrator/prompts/19_todo_issue_sync.md
+    needs: []
+    next_on_success: [label_github_issues]
+    
+  - id: label_github_issues
+    agent: issue_label_manager
+    prompt: src/agent_orchestrator/prompts/20_issue_label_manager.md
+    needs: [create_github_issues]
+    next_on_success: []
