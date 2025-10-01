@@ -187,7 +187,7 @@ def run_from_args(args: argparse.Namespace) -> None:
                         run_id,
                     )
                     _LOG.info("Copied worktree artifacts to %s", destination)
-                except Exception as exc:  # pragma: no cover - defensive
+                except (OSError, shutil.Error) as exc:  # pragma: no cover - defensive
                     _LOG.warning("Failed to persist worktree artifacts: %s", exc)
 
                 try:
