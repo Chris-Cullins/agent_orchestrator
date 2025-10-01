@@ -39,19 +39,37 @@ Select one of the predefined workflows or create your own:
 - `workflow.yaml` - Complete SDLC pipeline (planning → coding → testing → review → docs → merge)
 - `workflow_backlog_miner.yaml` - Architecture review and tech debt analysis
 
-### Step 3: Configure Your Agent Execution
+### Step 3: Configure Your AI Agent Platform
 
-You have two options for running agents:
+The orchestrator supports multiple AI agent platforms through different wrappers:
 
-#### Option A: Using the Real Codex Exec (Recommended)
+#### Claude CLI (Anthropic) - Recommended
 ```bash
+# Ensure Claude CLI is installed and authenticated
+claude --version
+
+# Run with Claude (recommended for quality)
+python -m agent_orchestrator run \
+  --repo /path/to/your/target/repository \
+  --workflow workflow.yaml \
+  --wrapper claude_wrapper.py \
+  --wrapper-arg --model \
+  --wrapper-arg sonnet
+```
+
+#### Codex Exec (OpenAI)
+```bash
+# Ensure codex exec is available and authenticated
+codex --version
+
+# Run with Codex
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
   --workflow workflow.yaml \
   --wrapper real_codex_wrapper.py
 ```
 
-#### Option B: Using the Bundled Mock Wrapper (For Testing)
+#### Mock Wrapper (For Testing)
 ```bash
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
@@ -59,7 +77,7 @@ python -m agent_orchestrator run \
   --wrapper src/agent_orchestrator/wrappers/codex_exec_wrapper.py
 ```
 
-#### Option B: Custom Command Template
+#### Custom Command Template
 ```bash
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
@@ -71,11 +89,11 @@ python -m agent_orchestrator run \
 
 #### Run Complete SDLC Pipeline
 ```bash
-# Full development workflow on your repository
+# Full development workflow on your repository using Claude
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
   --workflow workflow.yaml \
-  --wrapper src/agent_orchestrator/wrappers/codex_exec_wrapper.py \
+  --wrapper claude_wrapper.py \
   --pause-for-human-input \
   --log-level INFO
 ```
@@ -86,7 +104,7 @@ python -m agent_orchestrator run \
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
   --workflow workflow_backlog_miner.yaml \
-  --wrapper src/agent_orchestrator/wrappers/codex_exec_wrapper.py
+  --wrapper claude_wrapper.py
 ```
 
 #### Run with Custom Environment and Configuration
@@ -94,11 +112,11 @@ python -m agent_orchestrator run \
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
   --workflow workflow.yaml \
-  --wrapper src/agent_orchestrator/wrappers/codex_exec_wrapper.py \
+  --wrapper claude_wrapper.py \
   --env OPENAI_API_KEY=your-key \
   --env ENVIRONMENT=production \
-  --wrapper-arg --timeout \
-  --wrapper-arg 300 \
+  --wrapper-arg --model \
+  --wrapper-arg opus \
   --max-attempts 3 \
   --poll-interval 2.0
 ```
