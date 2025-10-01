@@ -4,6 +4,9 @@ Goal: Extract review comments from PRs and create actionable TODO items.
 
 Tasks:
 1. Read the summary from `.agents/pr_reviews/summary.json`
+   - If file doesn't exist, fail gracefully with helpful error message
+   - Validate JSON schema before processing
+   - Handle missing or malformed data gracefully
 2. For each PR that was reviewed:
    - Use `gh pr view <PR_NUMBER> --comments` to get all comments
    - Parse review comments to identify actionable items

@@ -6,21 +6,30 @@ steps:
     prompt: src/agent_orchestrator/prompts/11_pr_reviewer.md
     needs: []
     next_on_success: [create_todos]
+    timeout: 600
+    max_attempts: 2
 
   - id: create_todos
     agent: todo_creator
     prompt: src/agent_orchestrator/prompts/12_todo_creator.md
     needs: [review_open_prs]
     next_on_success: [fix_pr_issues]
+    timeout: 300
+    max_attempts: 2
 
   - id: fix_pr_issues
     agent: pr_fixer
     prompt: src/agent_orchestrator/prompts/13_pr_fixer.md
     needs: [create_todos]
     next_on_success: [merge_prs]
+    timeout: 900
+    max_attempts: 1
+    human_in_the_loop: true
 
   - id: merge_prs
     agent: pr_merger
     prompt: src/agent_orchestrator/prompts/14_pr_merger.md
     needs: [fix_pr_issues]
     next_on_success: []
+    timeout: 300
+    max_attempts: 2

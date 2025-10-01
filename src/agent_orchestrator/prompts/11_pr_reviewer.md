@@ -3,8 +3,10 @@
 Goal: Review all open PRs in the repository and provide detailed feedback as comments.
 
 Tasks:
-1. Use `gh pr list --state open` to get all open PRs
-2. For each open PR:
+1. Initialize working directory: `mkdir -p .agents/pr_reviews`
+2. Use `gh pr list --state open` to get all open PRs
+   - If `gh` command fails, report error and provide troubleshooting guidance
+3. For each open PR:
    - Use `gh pr view <PR_NUMBER>` to get PR details
    - Use `gh pr diff <PR_NUMBER>` to review the changes
    - Analyze the code for:
