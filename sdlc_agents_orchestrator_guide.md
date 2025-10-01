@@ -228,9 +228,9 @@ if all_done or (any_failed and nothing_left):
 
 ---
 
-## Swap In Your Real `codex exec`
+## Using Production AI Agent Wrappers
 
-Point the orchestrator at `src/agent_orchestrator/wrappers/codex_wrapper.py` for a production-ready shim.
+Point the orchestrator at `src/agent_orchestrator/wrappers/codex_wrapper.py` or `src/agent_orchestrator/wrappers/claude_wrapper.py` for production-ready AI agent integration.
 It shells out to `codex exec`, forwards extra CLI arguments, streams logs, and guarantees a compliant run
 report even when the agent forgets to emit one. Example:
 
