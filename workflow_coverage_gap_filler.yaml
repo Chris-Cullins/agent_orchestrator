@@ -1,0 +1,27 @@
+name: coverage_gap_filler
+description: Identifies low-coverage files and diff-coverage dips, generates targeted unit tests, and raises a PR with coverage validation gates.
+steps:
+  - id: analyze_coverage
+    agent: coverage_analyzer
+    prompt: src/agent_orchestrator/prompts/19_coverage_analyzer.md
+    needs: []
+    next_on_success: [generate_tests]
+    timeout: 600
+    max_attempts: 2
+
+  - id: generate_tests
+    agent: test_generator
+    prompt: src/agent_orchestrator/prompts/20_test_generator.md
+    needs: [analyze_coverage]
+    next_on_success: [validate_coverage]
+    timeout: 1200
+    max_attempts: 2
+    human_in_the_loop: true
+
+  - id: validate_coverage
+    agent: coverage_validator
+    prompt: src/agent_orchestrator/prompts/21_coverage_validator.md
+    needs: [generate_tests]
+    next_on_success: []
+    timeout: 600
+    max_attempts: 2
