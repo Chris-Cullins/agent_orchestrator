@@ -41,7 +41,7 @@ def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, li
     parser.add_argument(
         "--timeout",
         type=float,
-        default=300.0,  # 5 minutes default
+        default=3600.0,  # 1 hour default
         help="Maximum seconds to wait for codex exec to finish",
     )
     parser.add_argument(
