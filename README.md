@@ -52,7 +52,7 @@ claude --version
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
   --workflow workflow.yaml \
-  --wrapper claude_wrapper.py \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
   --wrapper-arg --model \
   --wrapper-arg sonnet
 ```
@@ -66,15 +66,17 @@ codex --version
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
   --workflow workflow.yaml \
-  --wrapper real_codex_wrapper.py
+  --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py
 ```
 
 #### Mock Wrapper (For Testing)
 ```bash
+# Note: mock_wrapper.py is not currently included in this repository
+# Use claude_wrapper.py or codex_wrapper.py instead
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
   --workflow workflow.yaml \
-  --wrapper src/agent_orchestrator/wrappers/codex_exec_wrapper.py
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
 ```
 
 #### Custom Command Template
@@ -84,6 +86,26 @@ python -m agent_orchestrator run \
   --workflow workflow.yaml \
   --command-template "your-agent-runner --agent {agent} --prompt {prompt} --repo {repo} --output {report}"
 ```
+
+#### Choosing the Right Wrapper
+
+The orchestrator includes several wrapper scripts located in `src/agent_orchestrator/wrappers/`:
+
+- **`claude_wrapper.py`** (Recommended): For Anthropic Claude CLI integration. Provides high-quality code generation and reasoning. Use with `--wrapper-arg --model` and `--wrapper-arg sonnet|opus|haiku` to specify the model.
+
+- **`codex_wrapper.py`**: For OpenAI Codex integration via `codex exec`. Use this if you have access to OpenAI's Codex platform.
+
+Choose your wrapper based on which AI platform you have access to and your quality/cost requirements.
+
+#### Wrapper Path Resolution
+
+The `--wrapper` argument accepts file paths that are resolved relative to your current working directory:
+
+- **Full path from orchestrator root** (recommended): `src/agent_orchestrator/wrappers/claude_wrapper.py`
+- **Absolute path**: `/full/path/to/src/agent_orchestrator/wrappers/claude_wrapper.py`
+- **Relative path**: If running from a different directory, adjust the path accordingly (e.g., `../agent_orchestrator/src/agent_orchestrator/wrappers/claude_wrapper.py`)
+
+**Important:** The CLI does not automatically search in `src/agent_orchestrator/wrappers/` - you must provide the full or relative path to the wrapper script. Simple filenames like `claude_wrapper.py` will only work if the file exists in your current directory.
 
 ### Step 4: Basic Usage Examples
 
@@ -120,7 +142,7 @@ For easy workflow execution, use the provided bash script:
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
   --workflow workflow.yaml \
-  --wrapper claude_wrapper.py \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
   --pause-for-human-input \
   --log-level INFO
 ```
@@ -131,7 +153,7 @@ python -m agent_orchestrator run \
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
   --workflow workflow_backlog_miner.yaml \
-  --wrapper claude_wrapper.py
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
 ```
 
 #### Run with Custom Environment and Configuration
@@ -139,7 +161,7 @@ python -m agent_orchestrator run \
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
   --workflow workflow.yaml \
-  --wrapper claude_wrapper.py \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
   --env OPENAI_API_KEY=your-key \
   --env ENVIRONMENT=production \
   --wrapper-arg --model \
@@ -184,7 +206,7 @@ Enable manual steps that require human input:
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
   --workflow workflow.yaml \
-  --wrapper src/agent_orchestrator/wrappers/codex_exec_wrapper.py \
+  --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
   --pause-for-human-input
 ```
 
@@ -204,7 +226,7 @@ echo '{"ci.tests": true, "security.scan": true}' > gates.json
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
   --workflow workflow.yaml \
-  --wrapper src/agent_orchestrator/wrappers/codex_exec_wrapper.py \
+  --wrapper codex_wrapper.py \
   --gate-state-file gates.json
 ```
 
@@ -213,7 +235,7 @@ python -m agent_orchestrator run \
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
   --workflow workflow.yaml \
-  --wrapper src/agent_orchestrator/wrappers/codex_exec_wrapper.py \
+  --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
   --workdir /tmp/agent-workspace \
   --logs-dir /var/log/agents \
   --state-file custom_state.json
@@ -343,7 +365,7 @@ cd path/to/agent_orchestrator
 python -m agent_orchestrator run \
   --repo ../ecommerce-site \
   --workflow workflow_backlog_miner.yaml \
-  --wrapper src/agent_orchestrator/wrappers/codex_exec_wrapper.py \
+  --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
   --log-level INFO
 ```
 
@@ -357,7 +379,7 @@ cd path/to/agent_orchestrator
 python -m agent_orchestrator run \
   --repo ../your-project \
   --workflow workflow.yaml \
-  --wrapper src/agent_orchestrator/wrappers/codex_exec_wrapper.py \
+  --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
   --pause-for-human-input \
   --env FEATURE_DESCRIPTION="Add OAuth2 user authentication"
 ```
