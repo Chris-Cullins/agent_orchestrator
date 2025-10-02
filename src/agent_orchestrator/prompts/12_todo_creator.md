@@ -3,7 +3,7 @@
 Goal: Extract review comments from PRs and create actionable TODO items.
 
 Tasks:
-1. Read the summary from `.agents/pr_reviews/summary.json`
+1. Read the summary from `${ARTIFACTS_DIR}/pr_reviews/summary.json`
    - If file doesn't exist, fail gracefully with helpful error message
    - Validate JSON schema before processing
    - Handle missing or malformed data gracefully
@@ -18,7 +18,7 @@ Tasks:
    - Category (bug, style, security, performance, documentation, testing)
 
 Deliverables:
-- `.agents/pr_reviews/todos.json` containing structured TODO items:
+- `${ARTIFACTS_DIR}/pr_reviews/todos.json` containing structured TODO items:
   ```json
   {
     "pr_<number>": [

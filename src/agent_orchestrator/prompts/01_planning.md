@@ -7,7 +7,7 @@ Input:
 
 Deliverables:
 1. `PLAN.md` at repo root: high-level scope, non-goals, milestones.
-2. `tasks.yaml` in `.agents/plan/` listing small tasks with owners and acceptance criteria.
+2. `tasks.yaml` in `${ARTIFACTS_DIR}/plan/` listing small tasks with owners and acceptance criteria.
 3. Mark the TODO in /backlog/TODO.md that you planned out as completed.
 
 Completion:

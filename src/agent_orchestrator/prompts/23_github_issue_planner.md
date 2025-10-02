@@ -19,7 +19,7 @@ Deliverables:
    - Milestones and success criteria
    - Reference to the source GitHub issue
 
-2. `tasks.yaml` in `.agents/plan/` listing small tasks with:
+2. `tasks.yaml` in `${ARTIFACTS_DIR}/plan/` listing small tasks with:
    - Task ID and description
    - Owner (can be "developer" or specific role)
    - Acceptance criteria
@@ -50,5 +50,5 @@ ${HIGH_LEVEL_DESCRIPTION}
 Completion:
 - Write a run report JSON to `${REPORT_PATH}` referencing produced artifacts:
   - `status`: "success" or "failed"
-  - `artifacts`: ["PLAN.md", ".agents/plan/tasks.yaml"]
+  - `artifacts`: ["PLAN.md", "${ARTIFACTS_DIR}/plan/tasks.yaml"]
   - `source_issue`: issue number

@@ -47,12 +47,6 @@ class Orchestrator:
         self._pause_for_human = pause_for_human_input
         self._log = logger or logging.getLogger(__name__)
 
-        self._reports_dir = repo_dir / ".agents" / "run_reports"
-        self._manual_inputs_dir = repo_dir / ".agents" / "run_inputs"
-        self._reports_dir.mkdir(parents=True, exist_ok=True)
-        if self._pause_for_human:
-            self._manual_inputs_dir.mkdir(parents=True, exist_ok=True)
-
         # Try to load existing state if resuming
         existing_state = state_persister.load() if start_at_step else None
 
@@ -69,6 +63,26 @@ class Orchestrator:
         else:
             # Start a new run
             run_id = run_id or uuid.uuid4().hex[:8]
+
+        # Create run-specific directory structure under .agents/runs/<run_id>/
+        self._run_dir = repo_dir / ".agents" / "runs" / run_id
+        self._reports_dir = self._run_dir / "reports"
+        self._logs_dir = self._run_dir / "logs"
+        self._artifacts_dir = self._run_dir / "artifacts"
+        self._manual_inputs_dir = self._run_dir / "manual_inputs"
+
+        # Create all run-specific directories
+        self._reports_dir.mkdir(parents=True, exist_ok=True)
+        self._logs_dir.mkdir(parents=True, exist_ok=True)
+        self._artifacts_dir.mkdir(parents=True, exist_ok=True)
+        if self._pause_for_human:
+            self._manual_inputs_dir.mkdir(parents=True, exist_ok=True)
+
+        # Update state persister to use run-specific state file
+        state_persister.set_path(self._run_dir / "run_state.json")
+
+        # Initialize or update state with run-specific directories
+        if not (existing_state and start_at_step):
             self._state = RunState(
                 run_id=run_id,
                 workflow_name=workflow.name,
@@ -148,6 +162,8 @@ class Orchestrator:
                     prompt_path=prompt_path,
                     manual_input_path=manual_input_path,
                     attempt=runtime.attempts,
+                    artifacts_dir=self._artifacts_dir,
+                    logs_dir=self._logs_dir,
                 )
             except Exception as exc:  # pragma: no cover
                 runtime.status = StepStatus.FAILED

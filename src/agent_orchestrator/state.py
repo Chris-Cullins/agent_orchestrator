@@ -25,3 +25,8 @@ class RunStatePersister:
     @property
     def path(self) -> Path:
         return self._path
+
+    def set_path(self, path: Path) -> None:
+        """Update the path where state will be saved."""
+        self._path = path
+        self._path.parent.mkdir(parents=True, exist_ok=True)
