@@ -134,6 +134,8 @@ def run_from_args(args: argparse.Namespace) -> None:
     state_persister = RunStatePersister(state_file)
 
     base_env = parse_env(args.env)
+    if args.issue_number:
+        base_env["ISSUE_NUMBER"] = args.issue_number
     resolved_logs_dir = Path(args.logs_dir).expanduser().resolve() if args.logs_dir else None
     if args.git_worktree and not resolved_logs_dir:
         resolved_logs_dir = repo_root_for_outputs / ".agents" / "logs"
@@ -238,6 +240,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--env",
         nargs="*",
         help="Environment variables to inject into agent runs (format KEY=VALUE)",
+    )
+    run_parser.add_argument(
+        "--issue-number",
+        help="GitHub issue number to fetch and process (automatically sets ISSUE_NUMBER env var)",
     )
 
     worktree_group = run_parser.add_argument_group("git worktree automation")

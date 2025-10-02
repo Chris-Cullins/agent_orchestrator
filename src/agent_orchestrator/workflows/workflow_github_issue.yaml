@@ -1,0 +1,44 @@
+name: github_issue_pipeline
+description: SDLC workflow starting from a GitHub issue through merge
+steps:
+  - id: fetch_github_issue
+    agent: github_issue_fetcher
+    prompt: src/agent_orchestrator/prompts/22_github_issue_fetcher.md
+    needs: []
+    next_on_success: [github_issue_plan]
+
+  - id: github_issue_plan
+    agent: dev_architect
+    prompt: src/agent_orchestrator/prompts/23_github_issue_planner.md
+    needs: [fetch_github_issue]
+    next_on_success: [coding_impl]
+
+  - id: coding_impl
+    agent: coding
+    prompt: src/agent_orchestrator/prompts/02_coding.md
+    needs: [github_issue_plan]
+    next_on_success: [code_review]
+
+  - id: code_review
+    agent: code_review
+    prompt: src/agent_orchestrator/prompts/06_code_review.md
+    needs: [coding_impl]
+    next_on_success: [docs_update]
+
+  - id: docs_update
+    agent: docs_updater
+    prompt: src/agent_orchestrator/prompts/05_docs.md
+    needs: [code_review]
+    next_on_success: [merge_pr]
+
+  - id: merge_pr
+    agent: pr_manager
+    prompt: src/agent_orchestrator/prompts/07_pr_manager.md
+    needs: [docs_update]
+    next_on_success: [cleanup]
+
+  - id: cleanup
+    agent: cleanup
+    prompt: src/agent_orchestrator/prompts/08_cleanup.md
+    needs: [merge_pr]
+    next_on_success: []
