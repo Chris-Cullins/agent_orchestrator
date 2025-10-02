@@ -29,6 +29,7 @@ class Orchestrator:
         pause_for_human_input: bool = False,
         logger: Optional[logging.Logger] = None,
         run_id: Optional[str] = None,
+        start_at_step: Optional[str] = None,
     ) -> None:
         self._workflow = workflow
         self._workflow_root = workflow_root
@@ -52,15 +53,31 @@ class Orchestrator:
         if self._pause_for_human:
             self._manual_inputs_dir.mkdir(parents=True, exist_ok=True)
 
-        run_id = run_id or uuid.uuid4().hex[:8]
-        self._state = RunState(
-            run_id=run_id,
-            workflow_name=workflow.name,
-            repo_dir=repo_dir,
-            reports_dir=self._reports_dir,
-            manual_inputs_dir=self._manual_inputs_dir,
-            steps={step_id: StepRuntime() for step_id in workflow.steps},
-        )
+        # Try to load existing state if resuming
+        existing_state = state_persister.load() if start_at_step else None
+
+        if existing_state and start_at_step:
+            # Resume from existing state
+            run_id = existing_state["run_id"]
+            self._state = self._load_state_from_dict(existing_state, workflow)
+            self._reset_steps_from(start_at_step, workflow)
+            self._log.info(
+                "Resuming run_id=%s from step=%s",
+                run_id,
+                start_at_step,
+            )
+        else:
+            # Start a new run
+            run_id = run_id or uuid.uuid4().hex[:8]
+            self._state = RunState(
+                run_id=run_id,
+                workflow_name=workflow.name,
+                repo_dir=repo_dir,
+                reports_dir=self._reports_dir,
+                manual_inputs_dir=self._manual_inputs_dir,
+                steps={step_id: StepRuntime() for step_id in workflow.steps},
+            )
+
         self._active_processes: Dict[str, StepLaunch] = {}
 
     @property
@@ -157,6 +174,10 @@ class Orchestrator:
                 try:
                     report = self._report_reader.read(launch.report_path)
                 except RunReportError as exc:
+                    # If process is still running, the report may be incomplete - wait
+                    if not process_finished:
+                        continue
+                    # Process finished but report is invalid - fail the step
                     runtime.last_error = str(exc)
                     runtime.status = StepStatus.FAILED
                     runtime.ended_at = utc_now()
@@ -249,6 +270,58 @@ class Orchestrator:
         if relative_to_repo.exists():
             return relative_to_repo
         raise FileNotFoundError(f"Prompt file not found for '{prompt}'")
+
+    def _load_state_from_dict(self, state_dict: dict, workflow: Workflow) -> RunState:
+        """Load RunState from a dictionary, reconstructing StepRuntime objects."""
+        steps_data = state_dict.get("steps", {})
+        steps = {}
+        for step_id in workflow.steps:
+            if step_id in steps_data:
+                step_data = steps_data[step_id]
+                steps[step_id] = StepRuntime(
+                    status=StepStatus[step_data["status"]],
+                    attempts=step_data["attempts"],
+                    report_path=Path(step_data["report_path"]) if step_data.get("report_path") else None,
+                    started_at=step_data.get("started_at"),
+                    ended_at=step_data.get("ended_at"),
+                    last_error=step_data.get("last_error"),
+                    artifacts=step_data.get("artifacts", []),
+                    metrics=step_data.get("metrics", {}),
+                    logs=step_data.get("logs", []),
+                    manual_input_path=Path(step_data["manual_input_path"]) if step_data.get("manual_input_path") else None,
+                )
+            else:
+                steps[step_id] = StepRuntime()
+
+        return RunState(
+            run_id=state_dict["run_id"],
+            workflow_name=state_dict["workflow_name"],
+            repo_dir=Path(state_dict["repo_dir"]),
+            reports_dir=Path(state_dict["reports_dir"]),
+            manual_inputs_dir=Path(state_dict["manual_inputs_dir"]),
+            created_at=state_dict.get("created_at", utc_now()),
+            steps=steps,
+        )
+
+    def _reset_steps_from(self, start_step: str, workflow: Workflow) -> None:
+        """Reset the specified step and all steps that depend on it (transitively)."""
+        if start_step not in workflow.steps:
+            raise ValueError(f"Step '{start_step}' not found in workflow")
+
+        # Find all steps that need to be reset (start_step + all downstream dependencies)
+        to_reset = {start_step}
+        changed = True
+        while changed:
+            changed = False
+            for step_id, step in workflow.steps.items():
+                if step_id not in to_reset and any(dep in to_reset for dep in step.needs):
+                    to_reset.add(step_id)
+                    changed = True
+
+        # Reset all identified steps to PENDING
+        for step_id in to_reset:
+            self._state.steps[step_id] = StepRuntime()
+            self._log.info("Reset step=%s to PENDING", step_id)
 
     def _persist_state(self) -> None:
         self._state_persister.save(self._state)
