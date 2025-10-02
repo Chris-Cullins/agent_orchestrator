@@ -11,7 +11,7 @@ Task:
 2. Extract and format the issue information into a structured markdown file
 
 Deliverables:
-1. `gh_issue_${ISSUE_NUMBER}.md` in /backlog/ containing:
+1. `gh_issue_${ISSUE_NUMBER}.md` at repo root containing:
    - Issue number and title
    - Issue state and creation/update timestamps
    - Labels, assignees, and milestone (if any)

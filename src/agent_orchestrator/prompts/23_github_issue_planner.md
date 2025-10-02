@@ -7,7 +7,7 @@ Input:
 - This file contains the full issue details including title, description, labels, and metadata
 
 Task:
-1. Locate and read the `gh_issue_*.md` file in the backlog directory.
+1. Locate and read the `gh_issue_*.md` file in the repo root
 2. Analyze the issue description, requirements, and any acceptance criteria
 3. Break down the work into concrete, actionable tasks
 4. Create a development plan with clear milestones
@@ -48,5 +48,7 @@ ${HIGH_LEVEL_DESCRIPTION}
 ```
 
 Completion:
-- Confirm all deliverables have been created
-- The wrapper will automatically generate the run report
+- Write a run report JSON to `${REPORT_PATH}` referencing produced artifacts:
+  - `status`: "success" or "failed"
+  - `artifacts`: ["PLAN.md", ".agents/plan/tasks.yaml"]
+  - `source_issue`: issue number
