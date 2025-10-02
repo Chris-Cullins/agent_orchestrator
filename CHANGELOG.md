@@ -8,10 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- Replace deprecated `datetime.utcnow()` with `datetime.now(timezone.utc)` for Python 3.13+ compatibility
+- Centralize timezone-aware timestamp generation with `datetime.now(timezone.utc)` for Python 3.13+ compatibility
+  - Added `src/agent_orchestrator/time_utils.py`
   - Updated `src/agent_orchestrator/models.py`
   - Updated `src/agent_orchestrator/wrappers/claude_wrapper.py`
   - Updated `src/agent_orchestrator/wrappers/codex_wrapper.py`
+  - Added regression tests `tests/test_time_utils.py` and `tests/test_models.py`
 - Update wrapper file references in documentation
   - Fixed all references from `codex_exec_wrapper.py` to `codex_wrapper.py` in `README.md`
   - Fixed all references from `real_codex_wrapper.py` to `codex_wrapper.py` in `README.md`
