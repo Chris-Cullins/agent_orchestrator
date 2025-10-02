@@ -190,6 +190,44 @@ python -m agent_orchestrator run \
 
 When cleanup is enabled (the default), run artifacts are copied to `<repo>/.agents/runs/<run_id>/` before the temporary worktree is removed so you can still review outputs.
 
+#### Resume a Failed Workflow Run
+
+If a workflow fails at a specific step, you can resume it from that step without re-running completed steps:
+
+```bash
+# Resume from a specific step (e.g., code_review)
+python -m agent_orchestrator run \
+  --repo /path/to/your/project \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
+  --start-at-step code_review
+```
+
+**How it works:**
+- The orchestrator loads the existing run state from `.agents/run_state.json`
+- Resets the specified step and all downstream dependent steps to `PENDING`
+- Preserves all completed upstream steps (e.g., `fetch_github_issue`, `github_issue_plan`, `coding_impl`)
+- Resumes execution from the specified step with a fresh attempt counter
+
+**Use cases:**
+- A step failed due to a transient error (network issue, API timeout)
+- You fixed code that was causing an agent to fail
+- You want to retry a step after making manual changes to the repository
+- Testing workflow changes without re-running expensive upstream steps
+
+**Example scenario:**
+```bash
+# Initial run fails at code_review step
+python -m agent_orchestrator run --repo . --workflow workflow.yaml --wrapper claude_wrapper.py
+# ... workflow runs: fetch_github_issue (✓), github_issue_plan (✓), coding_impl (✓), code_review (✗)
+
+# Fix the issue that caused code_review to fail, then resume
+python -m agent_orchestrator run --repo . --workflow workflow.yaml --wrapper claude_wrapper.py --start-at-step code_review
+# ... workflow resumes: code_review (attempt 1), docs_update, merge_pr, cleanup
+```
+
+**Note:** The `--start-at-step` flag requires an existing run state file. If you want to start a completely new run, omit this flag.
+
 ### Step 5: Understanding Output and Artifacts
 
 When you run the orchestrator, it creates a structured output in your target repository:

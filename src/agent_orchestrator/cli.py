@@ -169,6 +169,7 @@ def run_from_args(args: argparse.Namespace) -> None:
             pause_for_human_input=args.pause_for_human_input,
             logger=logging.getLogger("agent_orchestrator"),
             run_id=run_id_override,
+            start_at_step=args.start_at_step,
         )
 
         orchestrator.run()
@@ -244,6 +245,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--issue-number",
         help="GitHub issue number to fetch and process (automatically sets ISSUE_NUMBER env var)",
+    )
+    run_parser.add_argument(
+        "--start-at-step",
+        help="Resume a previous run starting at the specified step (resets that step and all downstream steps)",
     )
 
     worktree_group = run_parser.add_argument_group("git worktree automation")
