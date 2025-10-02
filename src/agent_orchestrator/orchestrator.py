@@ -157,6 +157,10 @@ class Orchestrator:
                 try:
                     report = self._report_reader.read(launch.report_path)
                 except RunReportError as exc:
+                    # If process is still running, the report may be incomplete - wait
+                    if not process_finished:
+                        continue
+                    # Process finished but report is invalid - fail the step
                     runtime.last_error = str(exc)
                     runtime.status = StepStatus.FAILED
                     runtime.ended_at = utc_now()
