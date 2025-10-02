@@ -72,7 +72,7 @@ python -m agent_orchestrator run \
 #### Mock Wrapper (For Testing)
 ```bash
 # Note: mock_wrapper.py is not currently included in this repository
-# Use claude_wrapper.py or codex_wrapper.py instead
+# Use src/agent_orchestrator/wrappers/claude_wrapper.py or src/agent_orchestrator/wrappers/codex_wrapper.py instead
 python -m agent_orchestrator run \
   --repo /path/to/your/target/repository \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
@@ -133,7 +133,7 @@ For easy workflow execution, use the provided bash script:
 **Script Options:**
 - `--repo PATH` - Path to target repository (default: current directory)
 - `--workflow PATH` - Path to workflow YAML file (default: src/agent_orchestrator/workflows/workflow_backlog_miner.yaml)
-- `--wrapper PATH` - Path to agent wrapper script (default: claude_wrapper.py)
+- `--wrapper PATH` - Path to agent wrapper script (default: src/agent_orchestrator/wrappers/claude_wrapper.py)
 - `--help` - Show help message
 
 #### Manual Execution: Complete SDLC Pipeline
@@ -218,11 +218,16 @@ python -m agent_orchestrator run \
 **Example scenario:**
 ```bash
 # Initial run fails at code_review step
-python -m agent_orchestrator run --repo . --workflow workflow.yaml --wrapper claude_wrapper.py
+python -m agent_orchestrator run --repo . \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
 # ... workflow runs: fetch_github_issue (✓), github_issue_plan (✓), coding_impl (✓), code_review (✗)
 
 # Fix the issue that caused code_review to fail, then resume
-python -m agent_orchestrator run --repo . --workflow workflow.yaml --wrapper claude_wrapper.py --start-at-step code_review
+python -m agent_orchestrator run --repo . \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
+  --start-at-step code_review
 # ... workflow resumes: code_review (attempt 1), docs_update, merge_pr, cleanup
 ```
 
@@ -286,7 +291,7 @@ echo '{"ci.tests": true, "security.scan": true}' > gates.json
 python -m agent_orchestrator run \
   --repo /path/to/your/project \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
-  --wrapper codex_wrapper.py \
+  --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
   --gate-state-file gates.json
 ```
 
@@ -368,6 +373,7 @@ python -m agent_orchestrator run --help
 - **State Manager**: Tracks execution progress and enables resume/retry capabilities  
 - **Report Reader**: Validates and processes agent output reports
 - **Gate Evaluator**: Controls workflow progression based on external conditions
+- **Time Utilities**: `time_utils.utc_now()` provides a single, timezone-aware timestamp source for run reports and wrapper logs (Python 3.13+ safe)
 
 ### Agent Contracts
 
@@ -404,6 +410,7 @@ steps:
   - `workflow.py` — Workflow loading and validation
   - `state.py` — Execution state persistence
   - `reporting.py` — Run report validation and parsing
+  - `time_utils.py` — Timezone-aware timestamp helpers shared across the orchestrator
   - `gating.py` — Conditional workflow progression
   - `prompts/` — Standard agent prompt templates
   - `wrappers/` — Agent execution adapters

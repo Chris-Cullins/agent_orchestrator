@@ -10,17 +10,17 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from agent_orchestrator.time_utils import utc_now
+
 RUN_REPORT_START = "<<<RUN_REPORT_JSON"
 RUN_REPORT_END = "RUN_REPORT_JSON>>>"
-ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 
 def utc_timestamp() -> str:
-    return datetime.now(timezone.utc).strftime(ISO_FORMAT)
+    return utc_now()
 
 
 def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, list[str]]:

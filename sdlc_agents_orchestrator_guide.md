@@ -56,6 +56,7 @@ You should see steps run in order and `*.json` appear in `demo_repo/.agents/run_
 - Schema: `schemas/run_report.schema.json`  
 - Required fields: `schema, run_id, step_id, agent, status, started_at, ended_at`  
 - `status`: `"COMPLETED"` or `"FAILED"`
+- `started_at` / `ended_at` must be timezone-aware ISO 8601 UTC strings—call `src/agent_orchestrator/time_utils.utc_now()` to stay compatible with Python 3.13+
 
 **Optional log marker (for CI logs/humans):**
 ```
@@ -237,11 +238,13 @@ report even when the agent forgets to emit one. Example:
 ```bash
 python -m agent_orchestrator run \
   --repo /path/to/repo \
-  --workflow workflows/default.yaml \
-  --wrapper codex_wrapper.py \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
+  --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
   --wrapper-arg --profile \
   --wrapper-arg prod
 ```
+
+Always pass the full or relative path to the wrapper script—the CLI does not search inside `src/agent_orchestrator/wrappers/` for you.
 
 Useful flags:
 - `--codex-bin` / `CODEX_EXEC_BIN` to pick the binary.
@@ -306,6 +309,7 @@ src/
     runner.py
     workflow.py
     reporting.py
+    time_utils.py
     gating.py
     state.py
     wrappers/
