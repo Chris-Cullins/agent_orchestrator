@@ -13,7 +13,8 @@ Deliverables:
    - Doc reference or section.
    - What is out of sync (behaviour, naming, dependencies, etc.).
    - Recommended next action.
-2. Mention the backlog file in the run report artifacts list.
+2. List the backlog file in the run report artifacts using its relative path (e.g., `backlog/architecture_alignment.md`).
+3. Capture at least two run report log entries that summarise the most important misalignments and where they live.
 
 Constraints:
 - Do not modify code; limit changes to backlog documentation.
@@ -22,4 +23,4 @@ Constraints:
 
 Completion:
 - Ensure the repo contains the updated backlog file.
-- Write a run report JSON to `${REPORT_PATH}` summarising key findings (`logs`) and referencing the backlog artifact.
+- Write a run report JSON to `${REPORT_PATH}` summarising key findings (`logs`) and referencing the backlog artifact with real relative paths (no placeholder text). Each log entry must describe a concrete observation or recommendation.

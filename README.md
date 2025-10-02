@@ -133,7 +133,7 @@ For easy workflow execution, use the provided bash script:
 **Script Options:**
 - `--repo PATH` - Path to target repository (default: current directory)
 - `--workflow PATH` - Path to workflow YAML file (default: src/agent_orchestrator/workflows/workflow_backlog_miner.yaml)
-- `--wrapper PATH` - Path to agent wrapper script (default: claude_wrapper.py)
+- `--wrapper PATH` - Path to agent wrapper script (default: src/agent_orchestrator/wrappers/claude_wrapper.py)
 - `--help` - Show help message
 
 #### Manual Execution: Complete SDLC Pipeline

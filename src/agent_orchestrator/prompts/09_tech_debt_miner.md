@@ -13,7 +13,8 @@ Deliverables:
    - Problem summary and why it matters.
    - Suggested remediation approach or spike.
    - Impact category (e.g., performance, maintainability, reliability).
-2. Reference the backlog file in the run report artifacts.
+2. Reference the backlog file in the run report artifacts using its relative path (e.g., `backlog/tech_debt.md`).
+3. Add run report log entries that highlight the highest-priority backlog items and why they matter.
 
 Constraints:
 - Do not attempt to fix issues; only document actionable backlog items.
@@ -22,4 +23,4 @@ Constraints:
 
 Completion:
 - Ensure the backlog file exists with today’s findings appended.
-- Write a run report JSON to `${REPORT_PATH}` summarising high-priority debt in the `logs` section and linking the backlog artifact.
+- Write a run report JSON to `${REPORT_PATH}` summarising high-priority debt in the `logs` section and linking the backlog artifact with real relative paths (no placeholder text). Each log entry must point to a specific backlog observation.

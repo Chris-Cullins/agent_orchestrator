@@ -64,6 +64,8 @@ You should see steps run in order and `*.json` appear in `demo_repo/.agents/run_
 RUN_REPORT_JSON>>>
 ```
 
+**Validation guardrails:** The orchestrator and bundled wrappers now reject run reports that keep placeholder artifact or log entries (for example, "<REPLACE ME>"). Always emit concrete artifact paths and log summaries before marking a step complete.
+
 **Recommended env to pass into agents:**
 - `RUN_ID`, `STEP_ID`, `REPO_DIR`, `REPORT_PATH`
 
@@ -237,11 +239,13 @@ report even when the agent forgets to emit one. Example:
 ```bash
 python -m agent_orchestrator run \
   --repo /path/to/repo \
-  --workflow workflows/default.yaml \
-  --wrapper codex_wrapper.py \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
+  --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
   --wrapper-arg --profile \
   --wrapper-arg prod
 ```
+
+Provide either the absolute path or a repository-relative path to the wrapper; the CLI does not scan `src/agent_orchestrator/wrappers/` automatically.
 
 Useful flags:
 - `--codex-bin` / `CODEX_EXEC_BIN` to pick the binary.

@@ -10,17 +10,17 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-RUN_REPORT_START = "<<<RUN_REPORT_JSON"
-RUN_REPORT_END = "RUN_REPORT_JSON>>>"
-ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
-
-
-def utc_timestamp() -> str:
-    return datetime.now(timezone.utc).strftime(ISO_FORMAT)
+from agent_orchestrator.models import utc_now
+from agent_orchestrator.run_report_format import (
+    RUN_REPORT_END,
+    RUN_REPORT_START,
+    PlaceholderContentError,
+    build_run_report_instructions,
+    normalize_run_report_payload,
+)
 
 
 def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, list[str]]:
@@ -58,7 +58,11 @@ def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, li
     return parser.parse_known_args(argv)
 
 
-def build_claude_command(args: argparse.Namespace, forwarded: list[str]) -> tuple[list[str], str]:
+def build_claude_command(
+    args: argparse.Namespace,
+    forwarded: list[str],
+    started_at: str,
+) -> tuple[list[str], str]:
     """Build the claude command and create the prompt content."""
     
     # Read the prompt file
@@ -79,23 +83,7 @@ Step ID: {args.step_id}
 Your task instructions:
 {prompt_content}
 
-IMPORTANT: When you complete your task, you must output a run report in this exact format:
-
-{RUN_REPORT_START}
-{{
-  "schema": "run_report@v0",
-  "run_id": "{args.run_id}",
-  "step_id": "{args.step_id}",
-  "agent": "{args.agent}",
-  "status": "COMPLETED",
-  "started_at": "{utc_timestamp()}",
-  "ended_at": "{utc_timestamp()}",
-  "artifacts": ["list", "of", "created", "file", "paths"],
-  "metrics": {{}},
-  "logs": ["summary", "of", "what", "you", "accomplished"],
-  "next_suggested_steps": []
-}}
-{RUN_REPORT_END}
+{build_run_report_instructions(args.run_id, args.step_id, args.agent, started_at)}
 
 Please proceed with the task and ensure you include the run report at the end.
 """
@@ -149,7 +137,7 @@ def synthesize_report(
         "agent": agent,
         "status": status,
         "started_at": started_at,
-        "ended_at": utc_timestamp(),
+        "ended_at": utc_now(),
         "artifacts": artifacts or [],
         "metrics": {
             "duration_ms": duration_ms,
@@ -165,8 +153,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     report_path = Path(args.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
+    started_at = utc_now()
+
     try:
-        command, enhanced_prompt = build_claude_command(args, forwarded)
+        command, enhanced_prompt = build_claude_command(args, forwarded, started_at)
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
@@ -185,7 +175,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     })
 
     cwd = args.working_dir or args.repo
-    started_at = utc_timestamp()
     start_time = time.monotonic()
 
     print(f"Running Claude CLI for agent '{args.agent}' in {cwd}")
@@ -264,16 +253,40 @@ def main(argv: Optional[list[str]] = None) -> int:
         report_payload.setdefault("step_id", args.step_id)
         report_payload.setdefault("agent", args.agent)
         report_payload.setdefault("started_at", started_at)
-        report_payload.setdefault("ended_at", utc_timestamp())
-        report_payload["status"] = str(report_payload.get("status", "COMPLETED")).upper()
+        report_payload.setdefault("ended_at", utc_now())
         report_payload.setdefault("artifacts", [])
         report_payload.setdefault("metrics", {})
         report_payload.setdefault("logs", [])
         report_payload.setdefault("next_suggested_steps", [])
-        
-        # Add duration metric
-        metrics = report_payload.setdefault("metrics", {})
-        metrics.setdefault("duration_ms", duration_ms)
+
+    metrics = report_payload.setdefault("metrics", {})
+    metrics.setdefault("duration_ms", duration_ms)
+    report_payload["status"] = str(report_payload.get("status", "COMPLETED")).upper()
+
+    try:
+        report_payload = normalize_run_report_payload(report_payload)
+    except PlaceholderContentError as exc:
+        error = (
+            "Run report rejected because it still contains placeholder content. "
+            f"{exc}"
+        )
+        print(error, file=sys.stderr)
+        report_payload = synthesize_report(
+            run_id=args.run_id,
+            step_id=args.step_id,
+            agent=args.agent,
+            status="FAILED",
+            started_at=started_at,
+            logs=[
+                error,
+                "Update the artifacts and logs with concrete values before finishing the step.",
+            ],
+            duration_ms=duration_ms,
+            artifacts=[],
+        )
+        report_payload = normalize_run_report_payload(report_payload)
+        _emit_report(report_payload, report_path)
+        return 1
 
     _emit_report(report_payload, report_path)
     return result.returncode

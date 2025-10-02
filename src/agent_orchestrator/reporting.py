@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from .models import RunReport
+from .run_report_format import PlaceholderContentError, normalize_run_report_payload
 
 try:
     from jsonschema import Draft202012Validator
@@ -42,6 +43,17 @@ class RunReportReader:
         if missing:
             raise RunReportError(f"Run report {path} missing fields: {', '.join(missing)}")
 
+        try:
+            payload = normalize_run_report_payload(payload)
+        except PlaceholderContentError as exc:
+            raise RunReportError(
+                f"Run report {path} rejected: {exc}"
+            ) from exc
+
+        artifacts = [str(item) for item in payload.get("artifacts", [])]
+        logs = [str(item) for item in payload.get("logs", [])]
+        ended_at_value = str(payload.get("ended_at", ""))
+
         return RunReport(
             schema=str(payload["schema"]),
             run_id=str(payload["run_id"]),
@@ -49,11 +61,10 @@ class RunReportReader:
             agent=str(payload["agent"]),
             status=str(payload["status"]).upper(),
             started_at=str(payload["started_at"]),
-            ended_at=str(payload["ended_at"]),
-            artifacts=list(payload.get("artifacts", [])),
+            ended_at=ended_at_value,
+            artifacts=artifacts,
             metrics=dict(payload.get("metrics", {})),
-            logs=list(payload.get("logs", [])),
+            logs=logs,
             next_suggested_steps=list(payload.get("next_suggested_steps", [])),
             raw=payload,
         )
-
