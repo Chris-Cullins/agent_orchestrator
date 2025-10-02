@@ -128,9 +128,24 @@ def run_from_args(args: argparse.Namespace) -> None:
     except Exception as exc:
         raise SystemExit(f"Failed to load run report schema: {exc}") from exc
 
-    state_file = Path(args.state_file)
-    if not state_file.is_absolute():
-        state_file = run_repo_dir / state_file
+    # If starting at a specific step, look for existing run state
+    if args.start_at_step:
+        # Look for the most recent run state file under .agents/runs/*/run_state.json
+        runs_dir = run_repo_dir / ".agents" / "runs"
+        if runs_dir.exists():
+            run_state_files = sorted(runs_dir.glob("*/run_state.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if run_state_files:
+                state_file = run_state_files[0]  # Use most recent
+                _LOG.info("Found existing run state: %s", state_file)
+            else:
+                raise SystemExit("No existing run state found for --start-at-step")
+        else:
+            raise SystemExit("No existing run state found for --start-at-step")
+    else:
+        # For new runs, state_file path doesn't matter yet - will be set by orchestrator
+        # Use a placeholder that will be replaced
+        state_file = run_repo_dir / ".agents" / "run_state.json"
+
     state_persister = RunStatePersister(state_file)
 
     base_env = parse_env(args.env)

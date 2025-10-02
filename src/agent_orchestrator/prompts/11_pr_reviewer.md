@@ -3,7 +3,7 @@
 Goal: Review all open PRs in the repository and provide detailed feedback as comments.
 
 Tasks:
-1. Initialize working directory: `mkdir -p .agents/pr_reviews`
+1. Initialize working directory: `mkdir -p ${ARTIFACTS_DIR}/pr_reviews`
 2. Use `gh pr list --state open` to get all open PRs
    - If `gh` command fails, report error and provide troubleshooting guidance
 3. For each open PR:
@@ -21,7 +21,7 @@ Tasks:
 
 Deliverables:
 - Review comments posted on each open PR
-- Summary report in `.agents/pr_reviews/summary.json` with:
+- Summary report in `${ARTIFACTS_DIR}/pr_reviews/summary.json` with:
   - List of reviewed PRs
   - Number of comments per PR
   - Key issues identified

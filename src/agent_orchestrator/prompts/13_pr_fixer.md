@@ -9,7 +9,7 @@ Goal: Fix issues identified in PR review comments and commit changes back to the
 - Consider using a dry-run mode or requiring human approval for critical changes
 
 Tasks:
-1. Read TODO items from `.agents/pr_reviews/todos.json`
+1. Read TODO items from `${ARTIFACTS_DIR}/pr_reviews/todos.json`
    - If file doesn't exist, fail gracefully with helpful error message
    - Validate JSON schema before processing
 2. For each PR with TODOs:
@@ -28,7 +28,7 @@ Tasks:
 Deliverables:
 - Code changes committed to each PR branch
 - Comments on PRs indicating fixes applied
-- Summary in `.agents/pr_reviews/fixes.json` with:
+- Summary in `${ARTIFACTS_DIR}/pr_reviews/fixes.json` with:
   - PRs fixed
   - Number of TODOs addressed per PR
   - Commit SHAs

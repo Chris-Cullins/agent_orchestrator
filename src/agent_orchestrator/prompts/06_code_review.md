@@ -3,7 +3,7 @@
 Goal: Perform a first-pass code review and annotate risks.
 
 Deliverables:
-- `REVIEW.md` in `.agents/review/` with:
+- `REVIEW.md` in `${ARTIFACTS_DIR}/review/` with:
   - Summary of changes
   - Risk areas
   - Specific comments with file/line references

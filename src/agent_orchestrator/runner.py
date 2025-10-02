@@ -64,6 +64,8 @@ class StepRunner:
         manual_input_path: Optional[Path] = None,
         extra_env: Optional[Dict[str, str]] = None,
         attempt: int = 1,
+        artifacts_dir: Optional[Path] = None,
+        logs_dir: Optional[Path] = None,
     ) -> StepLaunch:
         context = {
             **self._base_context,
@@ -80,7 +82,9 @@ class StepRunner:
         if self._default_args:
             command.extend(str(arg) for arg in self._default_args)
 
-        log_path = self._logs_dir / f"{run_id}__{step.id}__attempt{attempt}.log"
+        effective_logs_dir = logs_dir or self._logs_dir
+        effective_logs_dir.mkdir(parents=True, exist_ok=True)
+        log_path = effective_logs_dir / f"{run_id}__{step.id}__attempt{attempt}.log"
         log_file = log_path.open("w", encoding="utf-8")
 
         env = os.environ.copy()
@@ -95,6 +99,7 @@ class StepRunner:
                 "REPORT_PATH": str(report_path),
                 "MANUAL_RESULT_PATH": str(manual_input_path) if manual_input_path else "",
                 "STEP_ATTEMPT": str(attempt),
+                "ARTIFACTS_DIR": str(artifacts_dir) if artifacts_dir else str(self._repo_dir / ".agents" / "artifacts"),
             }
         )
         if extra_env:

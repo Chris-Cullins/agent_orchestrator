@@ -3,7 +3,7 @@
 Goal: Merge approved PRs and clean up branches.
 
 Tasks:
-1. Read the list of fixed PRs from `.agents/pr_reviews/fixes.json`
+1. Read the list of fixed PRs from `${ARTIFACTS_DIR}/pr_reviews/fixes.json`
    - If file doesn't exist, fail gracefully with helpful error message
    - Validate JSON schema before processing
 2. For each PR that was fixed:
@@ -24,7 +24,7 @@ Tasks:
 
 Deliverables:
 - Merged PRs with deleted branches
-- Summary in `.agents/pr_reviews/merged.json` with:
+- Summary in `${ARTIFACTS_DIR}/pr_reviews/merged.json` with:
   - Successfully merged PRs
   - Failed merges with reasons
   - Deleted branches
