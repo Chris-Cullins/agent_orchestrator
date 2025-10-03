@@ -296,10 +296,22 @@ class Orchestrator:
         return progressed
 
     def _dependencies_satisfied(self, step: Step) -> bool:
-        return all(
+        if not all(
             self._state.steps[dep].status in {StepStatus.COMPLETED, StepStatus.SKIPPED}
             for dep in step.needs
-        )
+        ):
+            return False
+
+        runtime = self._state.steps[step.id]
+        if runtime.blocked_by_loop:
+            target_runtime = self._state.steps.get(runtime.blocked_by_loop)
+            if not target_runtime or target_runtime.status not in {
+                StepStatus.COMPLETED,
+                StepStatus.SKIPPED,
+            }:
+                return False
+            runtime.blocked_by_loop = None
+        return True
 
     def _gates_open(self, step: Step) -> bool:
         for gate in step.gates:
@@ -375,6 +387,7 @@ class Orchestrator:
                     metrics=step_data.get("metrics", {}),
                     logs=step_data.get("logs", []),
                     manual_input_path=Path(step_data["manual_input_path"]) if step_data.get("manual_input_path") else None,
+                    blocked_by_loop=step_data.get("blocked_by_loop"),
                 )
             else:
                 steps[step_id] = StepRuntime()
@@ -430,6 +443,10 @@ class Orchestrator:
         from_runtime.logs = []
         from_runtime.metrics = {}
         from_runtime.artifacts = []
+        if from_step != to_step:
+            from_runtime.blocked_by_loop = to_step
+        else:
+            from_runtime.blocked_by_loop = None
         self._log.info(
             "Requeued loop-back source step=%s iteration=%s",
             from_step,

@@ -72,6 +72,7 @@ class StepRuntime:
     metrics: Dict[str, object] = field(default_factory=dict)
     logs: List[str] = field(default_factory=list)
     manual_input_path: Optional[Path] = None
+    blocked_by_loop: Optional[str] = None
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -86,6 +87,7 @@ class StepRuntime:
             "metrics": self.metrics,
             "logs": self.logs,
             "manual_input_path": str(self.manual_input_path) if self.manual_input_path else None,
+            "blocked_by_loop": self.blocked_by_loop,
         }
 
 
