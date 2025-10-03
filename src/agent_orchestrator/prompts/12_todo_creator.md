@@ -3,15 +3,12 @@
 Goal: Extract review comments from PRs and create actionable TODO items.
 
 Tasks:
-1. Read the summary from `${ARTIFACTS_DIR}/pr_reviews/summary.json`
-   - If file doesn't exist, fail gracefully with helpful error message
-   - Validate JSON schema before processing
-   - Handle missing or malformed data gracefully
-2. For each PR that was reviewed:
-   - Use `gh pr view <PR_NUMBER> --comments` to get all comments
+1. Look at all open PRs on the target github repo:
+   - Use `gh api repos/{owner}/{repo}/pulls/<PR_NUMBER>/comments` to fetch all existing review comments
+   - Collect all comments with their context (file, line, body)
    - Parse review comments to identify actionable items
    - Create TODO entries for each issue that needs to be fixed
-3. Organize TODOs by:
+2. Organize TODOs by:
    - PR number
    - File and line number (if applicable)
    - Priority (critical, high, medium, low)

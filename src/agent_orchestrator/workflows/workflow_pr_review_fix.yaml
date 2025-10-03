@@ -1,18 +1,10 @@
 name: pr_review_and_fix
 description: Automated PR review, fix, and merge workflow
 steps:
-  - id: review_open_prs
-    agent: pr_reviewer
-    prompt: src/agent_orchestrator/prompts/11_pr_reviewer.md
-    needs: []
-    next_on_success: [create_todos]
-    timeout: 600
-    max_attempts: 2
-
   - id: create_todos
     agent: todo_creator
     prompt: src/agent_orchestrator/prompts/12_todo_creator.md
-    needs: [review_open_prs]
+    needs: []
     next_on_success: [fix_pr_issues]
     timeout: 300
     max_attempts: 2

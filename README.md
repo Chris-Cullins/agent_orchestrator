@@ -241,6 +241,9 @@ When you run the orchestrator, it creates a structured output in your target rep
 your-target-repo/
 ├── .agents/                          # Orchestrator working directory
 │   ├── run_state.json               # Current execution state
+│   ├── prompts/                     # Custom prompt overrides (optional)
+│   │   ├── 02_coding.md             # Override default coding prompt
+│   │   └── 05_docs.md               # Override default docs prompt
 │   ├── run_reports/                 # Agent execution reports
 │   │   └── {run_id}__{step_id}.json
 │   ├── logs/                        # Agent stdout/stderr logs
@@ -263,7 +266,83 @@ your-target-repo/
 └── (your existing code...)
 ```
 
-### Step 6: Advanced Configuration
+### Step 6: Customizing Agent Behavior with Prompt Overrides
+
+The orchestrator supports repository-level prompt customization, allowing you to tailor agent behavior without modifying the orchestrator codebase or workflow definitions.
+
+#### How Prompt Overrides Work
+
+When executing a workflow, the orchestrator resolves prompts in this order:
+
+1. **Repository-level overrides** (highest priority): `.agents/prompts/` in your target repository
+2. **Default prompts** (fallback): `src/agent_orchestrator/prompts/` in the orchestrator
+
+This enables you to customize agent instructions on a per-repository basis.
+
+#### Setting Up Prompt Overrides
+
+Create custom prompt files in your target repository:
+
+```bash
+# In your target repository
+mkdir -p .agents/prompts
+
+# Override the coding agent prompt
+cat > .agents/prompts/02_coding.md << 'EOF'
+# Custom Coding Agent
+
+Your task: Implement the feature following our team's coding standards.
+
+Requirements:
+- Use TypeScript strict mode
+- Add JSDoc comments for all public APIs
+- Follow our company's error handling patterns
+- Write unit tests for all new functions
+
+[Rest of your custom instructions...]
+EOF
+```
+
+#### Example: Custom Documentation Standards
+
+```bash
+# Override documentation agent to enforce your style guide
+cat > .agents/prompts/05_docs.md << 'EOF'
+# Documentation Agent - Company Style
+
+Update documentation following our standards:
+- Use present tense ("returns" not "will return")
+- Include code examples for all public APIs
+- Add cross-references to related modules
+- Update both README.md and inline code comments
+EOF
+```
+
+When you run the orchestrator, it will automatically use your custom prompts when they exist:
+
+```bash
+python -m agent_orchestrator run \
+  --repo /path/to/your/project \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
+# The orchestrator will use .agents/prompts/05_docs.md if it exists,
+# otherwise falls back to src/agent_orchestrator/prompts/05_docs.md
+```
+
+#### Available Prompts to Override
+
+You can override any of these standard prompts:
+- `01_planning.md` - Initial task planning
+- `02_coding.md` - Code implementation
+- `03_e2e.md` - End-to-end testing
+- `04_manual.md` - Manual test plan generation
+- `05_docs.md` - Documentation updates
+- `06_code_review.md` - Code review
+- `07_pr_manager.md` - Pull request management
+- `08_cleanup.md` - Cleanup tasks
+- And more in `src/agent_orchestrator/prompts/`
+
+### Step 7: Advanced Configuration
 
 #### Human-in-the-Loop Integration
 Enable manual steps that require human input:
@@ -306,7 +385,7 @@ python -m agent_orchestrator run \
   --state-file custom_state.json
 ```
 
-### Step 7: Creating Custom Workflows
+### Step 8: Creating Custom Workflows
 
 Create your own workflow by defining a YAML file:
 
@@ -333,7 +412,7 @@ steps:
     next_on_success: []
 ```
 
-### Step 8: Monitoring and Debugging
+### Step 9: Monitoring and Debugging
 
 #### View Execution Status
 ```bash
@@ -369,9 +448,9 @@ python -m agent_orchestrator run --help
 
 ### Core Components
 
-- **Orchestrator**: Manages workflow execution, dependencies, and state persistence
+- **Orchestrator**: Manages workflow execution, dependencies, and state persistence. Supports repository-level prompt overrides via `.agents/prompts/` for per-repository customization
 - **Runner**: Handles agent process execution with configurable templates
-- **State Manager**: Tracks execution progress and enables resume/retry capabilities  
+- **State Manager**: Tracks execution progress and enables resume/retry capabilities
 - **Report Reader**: Validates and processes agent output reports, retries transient JSON parse failures, and surfaces consistent `RunReportError`s when ingestion ultimately fails
 - **Gate Evaluator**: Controls workflow progression based on external conditions
 - **Time Utilities**: `time_utils.utc_now()` provides a single, timezone-aware timestamp source for run reports and wrapper logs (Python 3.13+ safe)
