@@ -168,11 +168,21 @@ class GitWorktreeManager:
 def persist_worktree_outputs(worktree_path: Path, repo_root: Path, run_id: str) -> Path:
     """Copy worktree .agents artifacts into the primary repository."""
 
-    source_run_dir = worktree_path / ".agents" / "runs" / run_id
+    source_agents_dir = worktree_path / ".agents"
     destination_root = repo_root.expanduser().resolve() / ".agents" / "runs"
     destination_root.mkdir(parents=True, exist_ok=True)
     destination = destination_root / run_id
-    if not source_run_dir.exists():
+    if not source_agents_dir.exists():
+        destination.mkdir(parents=True, exist_ok=True)
         return destination
-    shutil.copytree(source_run_dir, destination, dirs_exist_ok=True)
+
+    destination.mkdir(parents=True, exist_ok=True)
+    for item in source_agents_dir.iterdir():
+        if item.name == "worktrees":
+            continue
+        target = destination / item.name
+        if item.is_dir():
+            shutil.copytree(item, target, dirs_exist_ok=True)
+        else:
+            shutil.copy2(item, target)
     return destination
