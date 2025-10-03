@@ -22,6 +22,10 @@ def temp_repo(tmp_path: Path) -> Path:
     """Create a temporary repository directory."""
     repo = tmp_path / "repo"
     repo.mkdir()
+    prompts_dir = repo / "prompts"
+    prompts_dir.mkdir()
+    for name in ["code.md", "review.md", "prep.md", "fix.md", "gate.md"]:
+        (prompts_dir / name).write_text("stub", encoding="utf-8")
     return repo
 
 
@@ -160,6 +164,95 @@ def test_loopback_on_gate_failure(temp_repo: Path, report_reader: RunReportReade
     assert "step_b" in launches
     assert launches.count("step_a") >= 2, "step_a should run at least twice due to loop-back"
     assert launches.count("step_b") >= 2, "step_b should run at least twice"
+
+
+def test_loopback_blocks_when_not_a_direct_dependency(
+    temp_repo: Path, report_reader: RunReportReader, state_persister: RunStatePersister
+):
+    """Ensure loop-back waits for target step even if not a declared dependency."""
+    workflow = Workflow(
+        name="loopback_blocker",
+        description="",
+        steps={
+            "prep": Step(
+                id="prep",
+                agent="prepper",
+                prompt="prompts/prep.md",
+                needs=[],
+            ),
+            "fix": Step(
+                id="fix",
+                agent="coder",
+                prompt="prompts/fix.md",
+                needs=["prep"],
+            ),
+            "gate": Step(
+                id="gate",
+                agent="reviewer",
+                prompt="prompts/gate.md",
+                needs=["prep"],  # Does not depend on "fix"
+                loop_back_to="fix",
+            ),
+        },
+    )
+
+    launches: List[str] = []
+
+    def mock_launch(step, **kwargs):
+        launches.append(step.id)
+        launch = Mock()
+        launch.process = Mock()
+        launch.process.poll = Mock(return_value=None)
+        launch.report_path = kwargs["report_path"]
+        launch.close_log = Mock()
+
+        def write_delayed_report() -> None:
+            time.sleep(0.05)
+            gate_failure = step.id == "gate" and launches.count("gate") == 1
+            write_report(
+                kwargs["report_path"],
+                kwargs["run_id"],
+                step.id,
+                step.agent,
+                status="COMPLETED",
+                gate_failure=gate_failure,
+            )
+            launch.process.poll = Mock(return_value=0)
+
+        import threading
+
+        threading.Thread(target=write_delayed_report, daemon=True).start()
+        return launch
+
+    mock_runner = Mock(spec=StepRunner)
+    mock_runner.launch = Mock(side_effect=mock_launch)
+
+    orchestrator = Orchestrator(
+        workflow=workflow,
+        workflow_root=temp_repo,
+        repo_dir=temp_repo,
+        report_reader=report_reader,
+        state_persister=state_persister,
+        runner=mock_runner,
+        poll_interval=0.05,
+        max_attempts=2,
+        max_iterations=3,
+        logger=logging.getLogger(__name__),
+    )
+
+    import threading
+
+    run_thread = threading.Thread(target=orchestrator.run, daemon=True)
+    run_thread.start()
+    run_thread.join(timeout=3.0)
+
+    gate_runs = [idx for idx, step_id in enumerate(launches) if step_id == "gate"]
+    fix_runs = [idx for idx, step_id in enumerate(launches) if step_id == "fix"]
+
+    assert len(gate_runs) >= 2, "gate step should run twice"
+    assert len(fix_runs) >= 2, "fix step should re-run before second gate run"
+    assert fix_runs[1] < gate_runs[1], "loop-back should rerun fix before gate"
+    assert orchestrator._state.steps["gate"].blocked_by_loop is None
 
 
 def test_max_iterations_enforced(temp_repo: Path, report_reader: RunReportReader, state_persister: RunStatePersister):
