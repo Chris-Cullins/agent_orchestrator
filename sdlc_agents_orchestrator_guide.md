@@ -65,6 +65,8 @@ You should see steps run in order and `*.json` appear in `demo_repo/.agents/run_
 RUN_REPORT_JSON>>>
 ```
 
+**Validation guardrails:** The orchestrator and bundled wrappers now reject run reports that keep placeholder artifact or log entries (for example, "<REPLACE ME>"). Always emit concrete artifact paths and log summaries before marking a step complete.
+
 **Recommended env to pass into agents:**
 - `RUN_ID`, `STEP_ID`, `REPO_DIR`, `REPORT_PATH`
 

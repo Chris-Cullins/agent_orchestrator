@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added wrapper selection guidance section in `README.md` explaining when to use each wrapper
   - **BREAKING CHANGE**: All CLI examples now use full paths to wrapper scripts (e.g., `src/agent_orchestrator/wrappers/codex_wrapper.py`)
   - Added "Wrapper Path Resolution" section documenting how the CLI resolves wrapper paths
+- Prevent backlog_miner run reports from persisting placeholder artifact/log content
+  - Enhanced run report prompt block to demand concrete data and reject instructional text
+  - Added shared run report normalisation/validation and wrapper guardrails for Codex/Claude flows
+  - Tightened backlog_miner prompts and regression tests to cover placeholder rejection
 
 ### Migration Guide
 If you have existing scripts or commands using the old wrapper references:
