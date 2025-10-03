@@ -33,7 +33,10 @@ class RunReportReader:
         if not path.exists():
             raise RunReportError(f"Run report not found: {path}")
         with path.open("r", encoding="utf-8") as f:
-            payload = json.load(f)
+            try:
+                payload = json.load(f)
+            except json.JSONDecodeError as exc:
+                raise RunReportError(f"Run report {path} contains invalid JSON: {exc}") from exc
 
         if self._validator:
             self._validator.validate(payload)
