@@ -1,8 +1,12 @@
+import shutil
 import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+from unittest import mock
 
+from agent_orchestrator.cli import run_from_args
 from agent_orchestrator.git_worktree import GitWorktreeManager, persist_worktree_outputs
 
 
@@ -50,6 +54,80 @@ class GitWorktreeManagerTests(unittest.TestCase):
 
         branches = self._run_git("branch").stdout
         self.assertNotIn(handle.branch, branches)
+
+
+class GitWorktreeCleanupTests(unittest.TestCase):
+    def test_cli_cleanup_handles_shutil_error(self) -> None:
+        with TemporaryDirectory() as tmp_repo:
+            repo_path = Path(tmp_repo)
+            workflow_path = repo_path / "workflow.yaml"
+            workflow_path.write_text("name: workflow\n", encoding="utf-8")
+            expected_workflow_path = workflow_path.resolve()
+
+            args = SimpleNamespace(
+                repo=str(repo_path),
+                workflow=str(workflow_path),
+                schema=None,
+                git_worktree=True,
+                git_worktree_root=None,
+                git_worktree_ref=None,
+                git_worktree_branch=None,
+                git_worktree_keep=False,
+                workdir=None,
+                gate_state_file=None,
+                logs_dir=None,
+                env=None,
+                wrapper=None,
+                command_template=None,
+                wrapper_arg=[],
+                issue_number=None,
+                start_at_step=None,
+                poll_interval=0.01,
+                max_attempts=1,
+                pause_for_human_input=False,
+            )
+
+            handle = SimpleNamespace(
+                path=repo_path / "worktree",
+                branch="agents/run-test",
+                root_repo=repo_path,
+                run_id="test-run",
+            )
+            handle.path.mkdir(parents=True, exist_ok=True)
+
+            workflow = mock.MagicMock()
+            workflow.name = "workflow"
+            workflow.steps = {}
+
+            runner = mock.MagicMock()
+
+            with (
+                mock.patch("agent_orchestrator.cli.load_workflow", return_value=workflow) as load_workflow,
+                mock.patch("agent_orchestrator.cli.build_runner", return_value=runner) as build_runner,
+                mock.patch("agent_orchestrator.cli.Orchestrator") as orchestrator_cls,
+                mock.patch("agent_orchestrator.cli.GitWorktreeManager") as manager_cls,
+                mock.patch(
+                    "agent_orchestrator.cli.persist_worktree_outputs",
+                    side_effect=shutil.Error("copy failed"),
+                ) as persist_outputs,
+            ):
+
+                orchestrator_instance = mock.MagicMock()
+                orchestrator_instance.run_id = "orchestrator-run"
+                orchestrator_cls.return_value = orchestrator_instance
+
+                manager_instance = mock.MagicMock()
+                manager_instance.repo_root = repo_path
+                manager_instance.create.return_value = handle
+                manager_cls.return_value = manager_instance
+
+                run_from_args(args)
+
+                load_workflow.assert_called_once_with(expected_workflow_path)
+                build_runner.assert_called_once()
+                orchestrator_instance.run.assert_called_once()
+                persist_outputs.assert_called_once()
+                manager_instance.remove.assert_called_once_with(handle)
 
 
 if __name__ == "__main__":

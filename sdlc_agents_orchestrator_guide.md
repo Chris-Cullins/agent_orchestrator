@@ -262,6 +262,7 @@ a report so the rest of the workflow can continue.
 
 - **Idempotency**: name work dirs/branches with `run_id__step_id`; skip if report exists & completed.
 - **Retries**: exponential backoff + cap attempts; surface reasons on failure.
+- **Run report ingestion**: transient JSON parse failures are retried automatically and ultimately reported as `RunReportError` with the source path for quick triage.
 - **Concurrency**: per‑repo limits; global WIP; fair scheduling.
 - **Timeouts**: hard caps per step; collect partial logs on cancel.
 - **Compensation**: trigger follow‑up workflows for rollbacks or fixes when late gates fail.

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Harden run report ingestion to retry transient JSON parse failures and surface consistent `RunReportError`s.
+  - Updated `src/agent_orchestrator/reporting.py`
+  - Added regression coverage in `tests/test_reporting.py`
+- Fix git worktree cleanup to import `shutil` and ensure artifact persistence failures no longer raise `NameError`.
+  - Updated `src/agent_orchestrator/cli.py`
+  - Added coverage for cleanup fallbacks in `tests/test_git_worktree.py`
 - Centralize timezone-aware timestamp generation with `datetime.now(timezone.utc)` for Python 3.13+ compatibility
   - Added `src/agent_orchestrator/time_utils.py`
   - Updated `src/agent_orchestrator/models.py`
