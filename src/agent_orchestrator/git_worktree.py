@@ -169,14 +169,12 @@ def persist_worktree_outputs(worktree_path: Path, repo_root: Path, run_id: str) 
     """Copy worktree .agents artifacts into the primary repository."""
 
     source_agents_dir = worktree_path / ".agents"
-    destination_root = repo_root.expanduser().resolve() / ".agents" / "runs"
-    destination_root.mkdir(parents=True, exist_ok=True)
-    destination = destination_root / run_id
+    destination = repo_root.expanduser().resolve() / ".agents"
+    destination.mkdir(parents=True, exist_ok=True)
+
     if not source_agents_dir.exists():
-        destination.mkdir(parents=True, exist_ok=True)
         return destination
 
-    destination.mkdir(parents=True, exist_ok=True)
     for item in source_agents_dir.iterdir():
         if item.name == "worktrees":
             continue
