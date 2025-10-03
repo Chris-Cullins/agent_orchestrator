@@ -1,6 +1,6 @@
 # PR Reviewer Agent
 
-Goal: Review all open PRs in the repository and provide detailed feedback as comments.
+Goal: Fetch all existing review comments from open PRs in the repository.
 
 Tasks:
 1. Initialize working directory: `mkdir -p ${ARTIFACTS_DIR}/pr_reviews`
@@ -8,23 +8,14 @@ Tasks:
    - If `gh` command fails, report error and provide troubleshooting guidance
 3. For each open PR:
    - Use `gh pr view <PR_NUMBER>` to get PR details
-   - Use `gh pr diff <PR_NUMBER>` to review the changes
-   - Analyze the code for:
-     - Code quality and best practices
-     - Potential bugs or edge cases
-     - Security vulnerabilities
-     - Performance issues
-     - Documentation gaps
-     - Test coverage
-   - Post review comments using `gh pr review <PR_NUMBER> --comment --body "<comment>"`
-   - For specific line comments, use `gh pr comment <PR_NUMBER> --body "<comment>"`
+   - Use `gh api repos/{owner}/{repo}/pulls/<PR_NUMBER>/comments` to fetch all existing review comments
+   - Collect all comments with their context (file, line, body)
 
 Deliverables:
-- Review comments posted on each open PR
 - Summary report in `${ARTIFACTS_DIR}/pr_reviews/summary.json` with:
   - List of reviewed PRs
-  - Number of comments per PR
-  - Key issues identified
+  - All existing review comments per PR
+  - File paths and line numbers for each comment
 
 Completion:
-- Write a run report JSON to `${REPORT_PATH}` with review summary.
+- Write a run report JSON to `${REPORT_PATH}` with collected comments summary.
