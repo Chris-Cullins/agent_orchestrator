@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enables per-repository customization of agent behavior without modifying orchestrator codebase or workflow definitions
 
 ### Fixed
+- Remove hardcoded macOS-specific PATH injection from wrapper modules to improve cross-platform compatibility
+  - Removed `/opt/homebrew/bin` PATH injection from `src/agent_orchestrator/wrappers/claude_wrapper.py`
+  - Removed `/opt/homebrew/bin` and `/opt/homebrew/Cellar/node/24.5.0/bin` PATH injections from `src/agent_orchestrator/wrappers/codex_wrapper.py`
+  - Wrappers now rely on system PATH without modification; users should configure their PATH environment or use `--claude-bin`/`--codex-bin` flags or `CLAUDE_CLI_BIN`/`CODEX_EXEC_BIN` environment variables for custom binary locations
 - Harden run report ingestion to retry transient JSON parse failures and surface consistent `RunReportError`s.
   - Updated `src/agent_orchestrator/reporting.py`
   - Added regression coverage in `tests/test_reporting.py`

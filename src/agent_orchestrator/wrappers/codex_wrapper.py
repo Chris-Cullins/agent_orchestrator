@@ -168,8 +168,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         "REPO_DIR": args.repo,
         "PROMPT_PATH": args.prompt,
         "REPORT_PATH": args.report,
-        # Make sure codex is in PATH
-        "PATH": f"/opt/homebrew/bin:/opt/homebrew/Cellar/node/24.5.0/bin:{env.get('PATH', '')}"
     })
 
     cwd = args.working_dir or args.repo
