@@ -426,6 +426,106 @@ steps:
     next_on_success: []
 ```
 
+#### Advanced Feature: Loop-Back for Iterative Refinement
+
+The orchestrator supports **loop-back** functionality, allowing steps to send work back to previous steps for iterative refinement. This is particularly useful for quality gates like code review that may need multiple iterations.
+
+**How Loop-Back Works:**
+
+1. A step (e.g., code review) completes and sets `gate_failure: true` in its run report
+2. If the step has a `loop_back_to` field defined, the orchestrator resets the target step and all downstream steps
+3. The workflow continues from the loop-back target step
+4. This process repeats until either:
+   - The gate passes (`gate_failure: false`)
+   - Max iterations is reached (default: 4)
+
+**Example Workflow with Loop-Back:**
+
+```yaml
+name: code_review_loop_workflow
+description: Iterative development with automated code review feedback
+steps:
+  - id: coding
+    agent: coding
+    prompt: src/agent_orchestrator/prompts/02_coding.md
+    needs: []
+    next_on_success: [code_review]
+    
+  - id: code_review
+    agent: code_review
+    prompt: src/agent_orchestrator/prompts/06_code_review.md
+    needs: [coding]
+    loop_back_to: coding  # Send back to coding if critical issues found
+    next_on_success: [testing]
+    
+  - id: testing
+    agent: manual_testing
+    prompt: src/agent_orchestrator/prompts/04_manual.md
+    needs: [code_review]
+    next_on_success: []
+```
+
+**Agent Run Report with Gate Failure:**
+
+When your code review agent detects critical issues, it should return:
+
+```json
+{
+  "schema": "run_report_v1",
+  "run_id": "abc123",
+  "step_id": "code_review",
+  "agent": "code_review",
+  "status": "COMPLETED",
+  "started_at": "2025-01-01T10:00:00Z",
+  "ended_at": "2025-01-01T10:05:00Z",
+  "gate_failure": true,
+  "logs": [
+    "Found 3 P0 issues that must be fixed",
+    "Security vulnerability in authentication logic",
+    "Missing input validation in user endpoint"
+  ]
+}
+```
+
+**Configuring Loop-Back Behavior:**
+
+```bash
+# Run with custom max iterations (default: 4)
+python -m agent_orchestrator run \
+  --repo /path/to/your/project \
+  --workflow src/agent_orchestrator/workflows/workflow_code_review_loop.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
+  --max-iterations 3  # Allow up to 3 loop-back iterations
+
+# Combine with max attempts for resilience
+python -m agent_orchestrator run \
+  --repo /path/to/your/project \
+  --workflow workflow.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
+  --max-iterations 5 \
+  --max-attempts 2  # Each step can retry twice on failure
+```
+
+**Key Parameters:**
+- `--max-iterations N` - Maximum number of times a loop-back can occur before marking the step as failed (default: 4)
+- `--max-attempts N` - Maximum retry attempts per step for transient failures (default: 2)
+
+**Loop-Back vs. Retry:**
+- **Retry** (`--max-attempts`): For transient failures (network issues, temporary errors). The same step re-runs.
+- **Loop-Back** (`loop_back_to`): For quality gates. Returns to an earlier step to fix identified issues.
+
+**Best Practices:**
+1. Use loop-back for quality gates (code review, testing validation)
+2. Set reasonable iteration limits (3-5) to prevent infinite loops
+3. Ensure your agent provides clear feedback in logs when setting `gate_failure: true`
+4. Use loop-back sparingly - only for steps that genuinely need iterative refinement
+
+**Example Use Cases:**
+- Code review finding P0/P1 issues → loop back to coding
+- E2E tests failing → loop back to implementation
+- Documentation quality check failing → loop back to docs update
+- Security scan finding vulnerabilities → loop back to code fixes
+
 ### Step 9: Monitoring and Debugging
 
 #### View Execution Status

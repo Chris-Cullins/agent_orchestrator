@@ -26,6 +26,7 @@ class Orchestrator:
         gate_evaluator: Optional[GateEvaluator] = None,
         poll_interval: float = 1.0,
         max_attempts: int = 2,
+        max_iterations: int = 4,
         pause_for_human_input: bool = False,
         logger: Optional[logging.Logger] = None,
         run_id: Optional[str] = None,
@@ -44,6 +45,7 @@ class Orchestrator:
         )
         self._poll_interval = poll_interval
         self._max_attempts = max(1, max_attempts)
+        self._max_iterations = max(1, max_iterations)
         self._pause_for_human = pause_for_human_input
         self._log = logger or logging.getLogger(__name__)
 
@@ -211,6 +213,33 @@ class Orchestrator:
                 runtime.metrics = report.metrics
                 runtime.logs = report.logs
 
+                # Check for gate failure and handle loop-back
+                step = self._workflow.steps[step_id]
+                if report.gate_failure and step.loop_back_to:
+                    if runtime.iteration_count < self._max_iterations:
+                        self._log.info(
+                            "gate failure detected step=%s iteration=%s/%s, looping back to step=%s",
+                            step_id,
+                            runtime.iteration_count + 1,
+                            self._max_iterations,
+                            step.loop_back_to,
+                        )
+                        self._handle_loop_back(step_id, step.loop_back_to)
+                        to_remove.append(step_id)
+                        progressed = True
+                        continue
+                    else:
+                        self._log.error(
+                            "max iterations reached step=%s iterations=%s, marking as failed",
+                            step_id,
+                            runtime.iteration_count,
+                        )
+                        runtime.status = StepStatus.FAILED
+                        runtime.last_error = f"Gate failure after {runtime.iteration_count} iterations - max iterations reached"
+                        to_remove.append(step_id)
+                        progressed = True
+                        continue
+
                 if report.status == "COMPLETED":
                     if runtime.manual_input_path and self._pause_for_human:
                         runtime.status = StepStatus.WAITING_ON_HUMAN
@@ -337,6 +366,7 @@ class Orchestrator:
                 steps[step_id] = StepRuntime(
                     status=StepStatus[step_data["status"]],
                     attempts=step_data["attempts"],
+                    iteration_count=step_data.get("iteration_count", 0),
                     report_path=Path(step_data["report_path"]) if step_data.get("report_path") else None,
                     started_at=step_data.get("started_at"),
                     ended_at=step_data.get("ended_at"),
@@ -378,6 +408,43 @@ class Orchestrator:
         for step_id in to_reset:
             self._state.steps[step_id] = StepRuntime()
             self._log.info("Reset step=%s to PENDING", step_id)
+
+    def _handle_loop_back(self, from_step: str, to_step: str) -> None:
+        """Handle loop-back from one step to another by resetting target and downstream steps."""
+        if to_step not in self._workflow.steps:
+            self._log.error("Invalid loop_back_to target step=%s from step=%s", to_step, from_step)
+            return
+
+        # Increment iteration count for the step that triggered the loop-back
+        from_runtime = self._state.steps[from_step]
+        from_runtime.iteration_count += 1
+        from_runtime.status = StepStatus.COMPLETED  # Mark as completed to avoid retry
+
+        # Find all steps between to_step and from_step (inclusive of to_step)
+        # These are steps that need to be reset
+        to_reset = {to_step}
+        changed = True
+        while changed:
+            changed = False
+            for step_id, step in self._workflow.steps.items():
+                # Add steps that depend on steps we're resetting
+                if step_id not in to_reset and any(dep in to_reset for dep in step.needs):
+                    to_reset.add(step_id)
+                    changed = True
+                    # Stop if we reach the step that triggered the loop-back
+                    if step_id == from_step:
+                        break
+
+        # Reset all identified steps to PENDING (except from_step)
+        for step_id in to_reset:
+            if step_id != from_step:
+                # Preserve iteration count from original runtime if it was part of the loop
+                old_iteration = self._state.steps[step_id].iteration_count
+                self._state.steps[step_id] = StepRuntime()
+                # If this is the target step, increment its iteration count
+                if step_id == to_step:
+                    self._state.steps[step_id].iteration_count = old_iteration
+                self._log.info("Reset step=%s to PENDING for loop-back", step_id)
 
     def _persist_state(self) -> None:
         self._state_persister.save(self._state)

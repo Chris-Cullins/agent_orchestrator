@@ -27,6 +27,7 @@ class Step:
     needs: List[str] = field(default_factory=list)
     next_on_success: List[str] = field(default_factory=list)
     gates: List[str] = field(default_factory=list)
+    loop_back_to: Optional[str] = None
     human_in_the_loop: bool = False
     metadata: Dict[str, str] = field(default_factory=dict)
 
@@ -54,6 +55,7 @@ class RunReport:
     metrics: Dict[str, str] = field(default_factory=dict)
     logs: List[str] = field(default_factory=list)
     next_suggested_steps: List[str] = field(default_factory=list)
+    gate_failure: bool = False
     raw: Dict[str, object] = field(default_factory=dict)
 
 
@@ -61,6 +63,7 @@ class RunReport:
 class StepRuntime:
     status: StepStatus = StepStatus.PENDING
     attempts: int = 0
+    iteration_count: int = 0
     report_path: Optional[Path] = None
     started_at: Optional[str] = None
     ended_at: Optional[str] = None
@@ -74,6 +77,7 @@ class StepRuntime:
         return {
             "status": self.status.value,
             "attempts": self.attempts,
+            "iteration_count": self.iteration_count,
             "report_path": str(self.report_path) if self.report_path else None,
             "started_at": self.started_at,
             "ended_at": self.ended_at,

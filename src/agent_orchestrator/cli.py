@@ -182,6 +182,7 @@ def run_from_args(args: argparse.Namespace) -> None:
             gate_evaluator=gate_evaluator,
             poll_interval=args.poll_interval,
             max_attempts=args.max_attempts,
+            max_iterations=args.max_iterations,
             pause_for_human_input=args.pause_for_human_input,
             logger=logging.getLogger("agent_orchestrator"),
             run_id=run_id_override,
@@ -231,6 +232,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("--poll-interval", type=float, default=1.0, help="Run report poll interval in seconds")
     run_parser.add_argument("--max-attempts", type=int, default=2, help="Max attempts per step before marking failed")
+    run_parser.add_argument("--max-iterations", type=int, default=4, help="Max loop-back iterations before marking failed (default: 4)")
     run_parser.add_argument(
         "--gate-state-file",
         help="Optional JSON file that lists gate statuses, e.g. {'ci.tests: passed': true}",

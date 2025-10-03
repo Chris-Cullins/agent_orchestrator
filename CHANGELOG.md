@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Loop-back functionality for iterative workflow refinement** (Issue #47)
+  - Steps can now send work back to previous steps when quality gates fail
+  - Added `loop_back_to` field to Step model for defining loop-back targets
+  - Added `gate_failure` boolean field to RunReport for triggering loop-backs
+  - Added `iteration_count` field to StepRuntime to track loop iterations
+  - Added `--max-iterations` CLI parameter (default: 4) to prevent infinite loops
+  - Loop-back mechanism automatically resets target step and all downstream dependencies
+  - When max iterations reached, step is marked as FAILED with descriptive error message
+  - Updated workflow loader to parse and validate `loop_back_to` references
+  - Added comprehensive test suite in `tests/test_loopback.py` and `tests/test_workflow_loopback.py`
+  - Created example workflow `workflows/workflow_code_review_loop.yaml` demonstrating the feature
+  - Added extensive documentation in README.md explaining loop-back usage and best practices
+  - Use case: Code review finding P0/P1 issues can automatically loop back to coding step
 - Repository-level prompt overrides: Orchestrator now checks `.agents/prompts/` in the target repository for custom prompt files before falling back to default prompts
   - Updated `src/agent_orchestrator/orchestrator.py` to implement prompt override resolution
   - Added comprehensive unit tests in `tests/test_prompt_resolution.py`

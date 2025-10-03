@@ -23,6 +23,7 @@ steps:
     agent: code_review
     prompt: src/agent_orchestrator/prompts/06_code_review.md
     needs: [coding_impl]
+    loop_back_to: coding_impl
     next_on_success: [docs_update]
 
   - id: docs_update
