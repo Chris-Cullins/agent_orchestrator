@@ -95,8 +95,8 @@ class PromptOverrideIntegrationTest(unittest.TestCase):
         coding_resolved = orchestrator._resolve_prompt_path("../prompts/coding.md")
 
         # Should use default prompts
-        self.assertEqual(planning_resolved, self.planning_prompt)
-        self.assertEqual(coding_resolved, self.coding_prompt)
+        self.assertEqual(planning_resolved, self.planning_prompt.resolve())
+        self.assertEqual(coding_resolved, self.coding_prompt.resolve())
 
         # Verify content is from default prompts
         self.assertIn("default planning agent", planning_resolved.read_text())
@@ -137,8 +137,8 @@ class PromptOverrideIntegrationTest(unittest.TestCase):
         coding_resolved = orchestrator._resolve_prompt_path("../prompts/coding.md")
 
         # Should use override prompts
-        self.assertEqual(planning_resolved, override_planning)
-        self.assertEqual(coding_resolved, override_coding)
+        self.assertEqual(planning_resolved, override_planning.resolve())
+        self.assertEqual(coding_resolved, override_coding.resolve())
 
         # Verify content is from override prompts
         self.assertIn("CUSTOM planning agent", planning_resolved.read_text())
@@ -172,8 +172,8 @@ class PromptOverrideIntegrationTest(unittest.TestCase):
         coding_resolved = orchestrator._resolve_prompt_path("../prompts/coding.md")
 
         # Planning should use override, coding should use default
-        self.assertEqual(planning_resolved, override_planning)
-        self.assertEqual(coding_resolved, self.coding_prompt)
+        self.assertEqual(planning_resolved, override_planning.resolve())
+        self.assertEqual(coding_resolved, self.coding_prompt.resolve())
 
         self.assertIn("Override for planning only", planning_resolved.read_text())
         self.assertIn("default coding agent", coding_resolved.read_text())
