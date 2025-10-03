@@ -279,6 +279,14 @@ class Orchestrator:
         candidate = Path(prompt)
         if candidate.is_absolute() and candidate.exists():
             return candidate
+
+        # Check for local prompt override in target repo first
+        prompt_filename = Path(prompt).name
+        local_override = (self._repo_dir / ".agents" / "prompts" / prompt_filename).resolve()
+        if local_override.exists():
+            self._log.info("Using local prompt override: %s", local_override)
+            return local_override
+
         relative_to_workflow = (self._workflow_root / prompt).resolve()
         if relative_to_workflow.exists():
             return relative_to_workflow
