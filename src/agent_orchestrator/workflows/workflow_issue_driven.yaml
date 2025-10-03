@@ -1,0 +1,60 @@
+name: issue_driven_development
+description: Pick a GitHub issue by priority labels and work it through the full SDLC pipeline
+metadata:
+  priority_labels:
+    - "priority:critical"
+    - "priority:high"
+    - "priority:medium"
+    - "priority:low"
+  required_labels:
+    - "status:ready"
+  exclude_labels:
+    - "status:in-progress"
+    - "status:blocked"
+    - "wontfix"
+steps:
+  - id: pick_issue
+    agent: issue_picker
+    prompt: src/agent_orchestrator/prompts/21_issue_picker.md
+    needs: []
+    next_on_success: [dev_architect_plan]
+    metadata:
+      priority_labels: ["priority:critical", "priority:high", "priority:medium", "priority:low"]
+      required_labels: ["status:ready"]
+      exclude_labels: ["status:in-progress", "status:blocked", "wontfix"]
+
+  - id: dev_architect_plan
+    agent: dev_architect_issue
+    prompt: src/agent_orchestrator/prompts/22_issue_planning.md
+    needs: [pick_issue]
+    next_on_success: [coding_impl]
+
+  - id: coding_impl
+    agent: coding
+    prompt: src/agent_orchestrator/prompts/02_coding.md
+    needs: [dev_architect_plan]
+    next_on_success: [code_review]
+
+  - id: code_review
+    agent: code_review
+    prompt: src/agent_orchestrator/prompts/06_code_review.md
+    needs: [coding_impl]
+    next_on_success: [docs_update]
+
+  - id: docs_update
+    agent: docs_updater
+    prompt: src/agent_orchestrator/prompts/05_docs.md
+    needs: [code_review]
+    next_on_success: [merge_pr]
+
+  - id: merge_pr
+    agent: pr_manager
+    prompt: src/agent_orchestrator/prompts/07_pr_manager.md
+    needs: [docs_update]
+    next_on_success: [cleanup]
+
+  - id: cleanup
+    agent: cleanup
+    prompt: src/agent_orchestrator/prompts/08_cleanup.md
+    needs: [merge_pr]
+    next_on_success: []

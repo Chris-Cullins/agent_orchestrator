@@ -357,6 +357,7 @@ tail -f /path/to/your/project/.agents/logs/*.log
 2. **Permission Errors**: Check write permissions on target repository
 3. **Failed Steps**: Review logs in `.agents/logs/` directory
 4. **Workflow Validation**: Verify YAML syntax and step dependencies
+5. **Run Report JSON Errors**: Transient parse failures are retried automatically; persistent issues raise `RunReportError` with the offending file path—inspect the JSON in `.agents/run_reports/` to fix formatting.
 
 **Getting Help:**
 ```bash
@@ -371,7 +372,7 @@ python -m agent_orchestrator run --help
 - **Orchestrator**: Manages workflow execution, dependencies, and state persistence
 - **Runner**: Handles agent process execution with configurable templates
 - **State Manager**: Tracks execution progress and enables resume/retry capabilities  
-- **Report Reader**: Validates and processes agent output reports
+- **Report Reader**: Validates and processes agent output reports, retries transient JSON parse failures, and surfaces consistent `RunReportError`s when ingestion ultimately fails
 - **Gate Evaluator**: Controls workflow progression based on external conditions
 - **Time Utilities**: `time_utils.utc_now()` provides a single, timezone-aware timestamp source for run reports and wrapper logs (Python 3.13+ safe)
 
