@@ -56,6 +56,7 @@ You should see steps run in order and `*.json` appear in `demo_repo/.agents/run_
 - Schema: `schemas/run_report.schema.json`  
 - Required fields: `schema, run_id, step_id, agent, status, started_at, ended_at`  
 - `status`: `"COMPLETED"` or `"FAILED"`
+- `started_at` / `ended_at` must be timezone-aware ISO 8601 UTC strings—call `src/agent_orchestrator/time_utils.utc_now()` to stay compatible with Python 3.13+
 
 **Optional log marker (for CI logs/humans):**
 ```
@@ -245,7 +246,7 @@ python -m agent_orchestrator run \
   --wrapper-arg prod
 ```
 
-Provide either the absolute path or a repository-relative path to the wrapper; the CLI does not scan `src/agent_orchestrator/wrappers/` automatically.
+Always pass the full or relative path to the wrapper script—the CLI does not search inside `src/agent_orchestrator/wrappers/` for you.
 
 Useful flags:
 - `--codex-bin` / `CODEX_EXEC_BIN` to pick the binary.
@@ -263,6 +264,7 @@ a report so the rest of the workflow can continue.
 
 - **Idempotency**: name work dirs/branches with `run_id__step_id`; skip if report exists & completed.
 - **Retries**: exponential backoff + cap attempts; surface reasons on failure.
+- **Run report ingestion**: transient JSON parse failures are retried automatically and ultimately reported as `RunReportError` with the source path for quick triage.
 - **Concurrency**: per‑repo limits; global WIP; fair scheduling.
 - **Timeouts**: hard caps per step; collect partial logs on cancel.
 - **Compensation**: trigger follow‑up workflows for rollbacks or fixes when late gates fail.
@@ -310,6 +312,7 @@ src/
     runner.py
     workflow.py
     reporting.py
+    time_utils.py
     gating.py
     state.py
     wrappers/

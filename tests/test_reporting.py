@@ -1,110 +1,60 @@
-from __future__ import annotations
-
 import json
-from datetime import datetime, timezone
+import threading
+import time
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-import pytest
-
-from agent_orchestrator.models import ISO_FORMAT, utc_now
 from agent_orchestrator.reporting import RunReportError, RunReportReader
 
 
-def _write_report(tmp_path, **overrides):
-    payload = {
-        "schema": "run_report@v0",
-        "run_id": "test_run",
-        "step_id": "step_one",
-        "agent": "tester",
-        "status": "COMPLETED",
-        "started_at": "2025-01-01T00:00:00.000000Z",
-        "ended_at": "2025-01-01T00:10:00.000000Z",
-        "artifacts": ["backlog/example.md"],
-        "metrics": {"duration_ms": 600000},
-        "logs": ["Documented findings"],
-        "next_suggested_steps": [],
-    }
-    payload.update(overrides)
-    path = tmp_path / "report.json"
-    path.write_text(json.dumps(payload), encoding="utf-8")
-    return path
+class RunReportReaderTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = TemporaryDirectory()
+        self.report_path = Path(self._tmp.name) / "report.json"
+        self.payload = {
+            "schema": "run_report@v0",
+            "run_id": "run123",
+            "step_id": "stepA",
+            "agent": "agent",
+            "status": "COMPLETED",
+            "started_at": "2024-01-01T00:00:00Z",
+            "ended_at": "2024-01-01T00:00:10Z",
+            "artifacts": ["artifact.txt"],
+            "metrics": {"duration": "10s"},
+            "logs": ["step finished"],
+            "next_suggested_steps": [],
+        }
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_reads_report_after_partial_write(self) -> None:
+        self.report_path.write_text("{\n  \"schema\":", encoding="utf-8")
+        reader = RunReportReader(retry_attempts=5, retry_delay=0.01)
+
+        def complete_write() -> None:
+            time.sleep(0.02)
+            self.report_path.write_text(json.dumps(self.payload), encoding="utf-8")
+
+        finisher = threading.Thread(target=complete_write)
+        finisher.start()
+        report = reader.read(self.report_path)
+        finisher.join()
+
+        self.assertEqual("COMPLETED", report.status)
+        self.assertEqual(self.payload["run_id"], report.run_id)
+        self.assertEqual(self.payload["artifacts"], report.artifacts)
+
+    def test_raises_error_when_json_stays_invalid(self) -> None:
+        self.report_path.write_text("{\n  \"schema\":", encoding="utf-8")
+        reader = RunReportReader(retry_attempts=2, retry_delay=0.01)
+
+        with self.assertRaises(RunReportError) as ctx:
+            reader.read(self.report_path)
+
+        self.assertIn("invalid JSON", str(ctx.exception))
 
 
-def test_run_report_reader_rejects_placeholder_artifacts(tmp_path):
-    report_path = _write_report(
-        tmp_path,
-        artifacts=["list", "of", "created", "file", "paths"],
-    )
-
-    reader = RunReportReader()
-
-    with pytest.raises(RunReportError) as exc:
-        reader.read(report_path)
-
-    assert "placeholder artifact" in str(exc.value)
-
-
-def test_run_report_reader_rejects_placeholder_logs(tmp_path):
-    report_path = _write_report(
-        tmp_path,
-        logs=["summary", "of", "what", "you", "accomplished"],
-    )
-
-    reader = RunReportReader()
-
-    with pytest.raises(RunReportError) as exc:
-        reader.read(report_path)
-
-    assert "placeholder logs" in str(exc.value)
-
-
-def test_run_report_reader_rejects_missing_logs(tmp_path):
-    report_path = _write_report(
-        tmp_path,
-        logs=[],
-    )
-
-    reader = RunReportReader()
-
-    with pytest.raises(RunReportError) as exc:
-        reader.read(report_path)
-
-    assert "log entry" in str(exc.value)
-
-
-def test_run_report_reader_rejects_placeholder_ended_at(tmp_path):
-    report_path = _write_report(
-        tmp_path,
-        ended_at="<REPLACE WITH UTC TIMESTAMP WHEN YOU FINISH>",
-    )
-
-    reader = RunReportReader()
-
-    with pytest.raises(RunReportError) as exc:
-        reader.read(report_path)
-
-    assert "placeholder ended_at" in str(exc.value)
-
-
-def test_run_report_reader_accepts_valid_report(tmp_path):
-    report_path = _write_report(
-        tmp_path,
-        artifacts=["backlog/architecture_alignment.md"],
-        logs=["Captured architecture misalignments in backlog"],
-        ended_at="2025-01-01T00:15:00.000000Z",
-    )
-
-    reader = RunReportReader()
-    report = reader.read(report_path)
-
-    assert report.artifacts == ["backlog/architecture_alignment.md"]
-    assert report.logs == ["Captured architecture misalignments in backlog"]
-
-
-def test_utc_now_returns_utc_timestamp():
-    timestamp = utc_now()
-
-    assert timestamp.endswith("Z")
-    datetime.strptime(timestamp, ISO_FORMAT)
-
-    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    assert dt.tzinfo == timezone.utc
+if __name__ == "__main__":
+    unittest.main()

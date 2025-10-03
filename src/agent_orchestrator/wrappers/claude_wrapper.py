@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from agent_orchestrator.models import utc_now
+from agent_orchestrator.time_utils import utc_now
 from agent_orchestrator.run_report_format import (
     RUN_REPORT_END,
     RUN_REPORT_START,

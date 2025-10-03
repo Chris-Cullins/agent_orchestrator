@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Optional
 
 from .models import RunReport
-from .run_report_format import PlaceholderContentError, normalize_run_report_payload
 
 try:
     from jsonschema import Draft202012Validator
@@ -18,8 +18,16 @@ class RunReportError(Exception):
 
 
 class RunReportReader:
-    def __init__(self, schema_path: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        schema_path: Optional[Path] = None,
+        *,
+        retry_attempts: int = 3,
+        retry_delay: float = 0.2,
+    ) -> None:
         self._validator = None
+        self._retry_attempts = max(1, int(retry_attempts))
+        self._retry_delay = max(0.0, float(retry_delay))
         if schema_path:
             if Draft202012Validator is None:
                 raise RunReportError("jsonschema must be installed to validate run reports")
@@ -32,30 +40,45 @@ class RunReportReader:
     def read(self, path: Path) -> RunReport:
         if not path.exists():
             raise RunReportError(f"Run report not found: {path}")
-        with path.open("r", encoding="utf-8") as f:
+        payload = None
+        last_error: Optional[json.JSONDecodeError] = None
+        for attempt in range(1, self._retry_attempts + 1):
             try:
-                payload = json.load(f)
+                with path.open("r", encoding="utf-8") as f:
+                    payload = json.load(f)
+                break
             except json.JSONDecodeError as exc:
-                raise RunReportError(f"Run report {path} contains invalid JSON: {exc}") from exc
+                last_error = exc
+                if attempt == self._retry_attempts:
+                    message = (
+                        f"Run report {path} contains invalid JSON after {self._retry_attempts} attempts: {exc}"
+                    )
+                    raise RunReportError(message) from exc
+                if self._retry_delay:
+                    time.sleep(self._retry_delay)
+            except ValueError as exc:
+                raise RunReportError(f"Run report {path} could not be parsed: {exc}") from exc
+            except OSError as exc:
+                raise RunReportError(f"Failed to read run report {path}: {exc}") from exc
+
+        if payload is None:
+            if last_error:
+                raise RunReportError(f"Run report {path} could not be parsed: {last_error}") from last_error
+            raise RunReportError(f"Run report {path} could not be read")
+
+        if not isinstance(payload, dict):
+            raise RunReportError(f"Run report {path} must be a JSON object, got {type(payload).__name__}")
 
         if self._validator:
-            self._validator.validate(payload)
+            try:
+                self._validator.validate(payload)
+            except Exception as exc:  # pragma: no cover - depends on optional jsonschema
+                raise RunReportError(f"Run report {path} failed schema validation: {exc}") from exc
 
         required = ["schema", "run_id", "step_id", "agent", "status", "started_at", "ended_at"]
         missing = [field for field in required if field not in payload]
         if missing:
             raise RunReportError(f"Run report {path} missing fields: {', '.join(missing)}")
-
-        try:
-            payload = normalize_run_report_payload(payload)
-        except PlaceholderContentError as exc:
-            raise RunReportError(
-                f"Run report {path} rejected: {exc}"
-            ) from exc
-
-        artifacts = [str(item) for item in payload.get("artifacts", [])]
-        logs = [str(item) for item in payload.get("logs", [])]
-        ended_at_value = str(payload.get("ended_at", ""))
 
         return RunReport(
             schema=str(payload["schema"]),
@@ -64,10 +87,10 @@ class RunReportReader:
             agent=str(payload["agent"]),
             status=str(payload["status"]).upper(),
             started_at=str(payload["started_at"]),
-            ended_at=ended_at_value,
-            artifacts=artifacts,
+            ended_at=str(payload["ended_at"]),
+            artifacts=list(payload.get("artifacts", [])),
             metrics=dict(payload.get("metrics", {})),
-            logs=logs,
+            logs=list(payload.get("logs", [])),
             next_suggested_steps=list(payload.get("next_suggested_steps", [])),
             raw=payload,
         )

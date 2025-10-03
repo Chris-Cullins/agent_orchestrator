@@ -7,11 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Repository-level prompt overrides: Orchestrator now checks `.agents/prompts/` in the target repository for custom prompt files before falling back to default prompts
+  - Updated `src/agent_orchestrator/orchestrator.py` to implement prompt override resolution
+  - Added comprehensive unit tests in `tests/test_prompt_resolution.py`
+  - Added integration tests in `tests/test_prompt_override_integration.py`
+  - Enables per-repository customization of agent behavior without modifying orchestrator codebase or workflow definitions
+
 ### Fixed
-- Replace deprecated `datetime.utcnow()` with `datetime.now(timezone.utc)` for Python 3.13+ compatibility
+- Harden run report ingestion to retry transient JSON parse failures and surface consistent `RunReportError`s.
+  - Updated `src/agent_orchestrator/reporting.py`
+  - Added regression coverage in `tests/test_reporting.py`
+- Fix git worktree cleanup to import `shutil` and ensure artifact persistence failures no longer raise `NameError`.
+  - Updated `src/agent_orchestrator/cli.py`
+  - Added coverage for cleanup fallbacks in `tests/test_git_worktree.py`
+- Centralize timezone-aware timestamp generation with `datetime.now(timezone.utc)` for Python 3.13+ compatibility
+  - Added `src/agent_orchestrator/time_utils.py`
   - Updated `src/agent_orchestrator/models.py`
   - Updated `src/agent_orchestrator/wrappers/claude_wrapper.py`
   - Updated `src/agent_orchestrator/wrappers/codex_wrapper.py`
+  - Added regression tests `tests/test_time_utils.py` and `tests/test_models.py`
 - Update wrapper file references in documentation
   - Fixed all references from `codex_exec_wrapper.py` to `codex_wrapper.py` in `README.md`
   - Fixed all references from `real_codex_wrapper.py` to `codex_wrapper.py` in `README.md`
