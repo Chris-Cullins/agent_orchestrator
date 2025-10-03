@@ -7,7 +7,7 @@ A production-ready, file-driven orchestrator for chaining SDLC agents via run re
 ### Prerequisites
 
 1. **Python Environment**: Python 3.10+ (Python 3.13+ fully supported) with virtual environment support
-2. **AI Agent Platform**: Access to `codex exec` or similar AI agent execution platform
+2. **AI Agent Platform**: Access to a supported agent binary such as `codex` (OpenAI Codex Exec) or the Anthropic `claude` CLI
 3. **Target Repository**: A Git repository where you want to run the SDLC pipeline
 
 ### Step 1: Installation
@@ -28,6 +28,8 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
+If you skip the editable install, prefix orchestrator commands with `PYTHONPATH=src` so Python can resolve the package.
+
 **Note**: If your AI agent binaries (`claude` or `codex`) are not in your system PATH, you can either:
 - Add them to your PATH: `export PATH="/path/to/binaries:$PATH"`
 - Use the `--claude-bin` or `--codex-bin` wrapper arguments to specify the binary location
@@ -39,10 +41,16 @@ export CLAUDE_CLI_BIN=/path/to/claude
 export CODEX_EXEC_BIN=/path/to/codex
 
 # Example: Using wrapper arguments
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
   --wrapper-arg --claude-bin \
   --wrapper-arg /path/to/claude
+```
+
+```bash
+# Verify your agent binaries are available
+codex --version  # Codex wrapper
+claude --version # Claude wrapper
 ```
 
 ### Step 2: Choose Your Workflow
@@ -63,7 +71,7 @@ The orchestrator supports multiple AI agent platforms through different wrappers
 claude --version
 
 # Run with Claude (recommended for quality)
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/target/repository \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
@@ -77,7 +85,7 @@ python -m agent_orchestrator run \
 codex --version
 
 # Run with Codex
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/target/repository \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py
@@ -87,7 +95,7 @@ python -m agent_orchestrator run \
 ```bash
 # Note: mock_wrapper.py is not currently included in this repository
 # Use src/agent_orchestrator/wrappers/claude_wrapper.py or src/agent_orchestrator/wrappers/codex_wrapper.py instead
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/target/repository \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
@@ -95,7 +103,7 @@ python -m agent_orchestrator run \
 
 #### Custom Command Template
 ```bash
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/target/repository \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --command-template "your-agent-runner --agent {agent} --prompt {prompt} --repo {repo} --output {report}"
@@ -153,18 +161,17 @@ For easy workflow execution, use the provided bash script:
 #### Manual Execution: Complete SDLC Pipeline
 ```bash
 # Full development workflow on your repository using Claude
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli --log-level INFO run \
   --repo /path/to/your/project \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
-  --pause-for-human-input \
-  --log-level INFO
+  --pause-for-human-input
 ```
 
 #### Manual Execution: Architecture and Tech Debt Analysis
 ```bash
 # Analyze your codebase for technical debt and architecture misalignments
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/project \
   --workflow src/agent_orchestrator/workflows/workflow_backlog_miner.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
@@ -172,7 +179,7 @@ python -m agent_orchestrator run \
 
 #### Run with Custom Environment and Configuration
 ```bash
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/project \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
@@ -186,7 +193,7 @@ python -m agent_orchestrator run \
 
 #### Run with Automated Git Worktree Isolation
 ```bash
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/project \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
@@ -204,13 +211,78 @@ python -m agent_orchestrator run \
 
 When cleanup is enabled (the default), run artifacts are copied to `<repo>/.agents/runs/<run_id>/` before the temporary worktree is removed so you can still review outputs.
 
+### Automate Recurring Runs with systemd timers
+
+#### CLI essentials for unattended runs
+- Minimum command: `python -m agent_orchestrator.cli run --repo <repo> --workflow <workflow> --wrapper <wrapper>`
+- Always provide absolute paths so the service keeps working after reboots
+- Wrapper binaries can come from `PATH`, `--wrapper-arg --codex-bin/--claude-bin`, or `CODEX_EXEC_BIN` / `CLAUDE_CLI_BIN`
+- Pass `--logs-dir` when you want stable log locations; the installer defaults to `<repo>/.agents/systemd-logs/<unit>`
+- The orchestrator runs from the repo root (`--workdir` defaults to the repo), ensuring prompt overrides under `.agents/prompts/` resolve
+
+#### Install script quick tour
+- Command: `src/agent_orchestrator/scripts/install_systemd_timer.sh install ...`
+- Generated assets:
+  - `~/.config/systemd/user/<unit>.service`
+  - `~/.config/systemd/user/<unit>.timer`
+  - `<repo>/.agents/systemd/<unit>.sh` helper that handles locking and logging
+- Unit naming: omit `--unit-name` to auto-generate `agent-orchestrator-<repo>-<workflow>`; values are lowercased and non-alphanumerics collapse to single hyphens so the service/timer names stay systemd-safe
+- Service details:
+  - `WorkingDirectory` is set to the repo
+  - `ExecStart` runs the helper, which executes `flock -n <repo>/.agents/locks/<unit>.lock -- python -m agent_orchestrator.cli run ...`
+  - Stdout/stderr append to `<repo>/.agents/systemd-logs/<unit>/<unit>.log`
+  - `TimeoutStartSec=0` keeps long workflows from being aborted
+- Timer details:
+  - Default `OnCalendar=*:0/30` (top and half of every hour)
+  - `Persistent=true` so missed runs execute after downtime
+  - Optional `--randomized-delay` reduces thundering herd restarts
+
+#### Usage examples
+```bash
+# Install a weekday timer and trigger an immediate run
+./src/agent_orchestrator/scripts/install_systemd_timer.sh install \
+  --repo /absolute/path/to/target/repo \
+  --workflow src/agent_orchestrator/workflows/workflow_pr_review_fix.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
+  --unit-name pr-review \
+  --calendar 'Mon..Fri *-*-* 09,13,17:00' \
+  --wrapper-arg --claude-bin \
+  --wrapper-arg /usr/local/bin/claude \
+  --env CLAUDE_CLI_BIN=/usr/local/bin/claude \
+  --randomized-delay 300 \
+  --start-now
+
+# Regenerate units in CI without touching systemctl
+SKIP_SYSTEMCTL=1 ./src/agent_orchestrator/scripts/install_systemd_timer.sh install \
+  --repo /tmp/repo \
+  --workflow src/agent_orchestrator/workflows/workflow_backlog_miner.yaml \
+  --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
+  --no-enable
+
+# Uninstall a timer
+./src/agent_orchestrator/scripts/install_systemd_timer.sh uninstall \
+  --repo /absolute/path/to/target/repo \
+  --unit-name pr-review
+```
+
+#### Verification and troubleshooting
+- Status: `systemctl --user status pr-review.timer` and `systemctl --user list-timers pr-review*`
+- Logs: `tail -f <repo>/.agents/systemd-logs/pr-review/pr-review.log`
+- Outputs: inspect `<repo>/.agents/runs/<run_id>/reports/` and `logs/` for per-attempt details
+- Prerequisites:
+  - User systemd instance running (`loginctl enable-linger $(whoami)` on headless nodes)
+  - Wrapper binaries available on `PATH` or supplied via `--wrapper-arg` / env vars
+  - Stable Python interpreter path (pass `--python` if your virtualenv moves)
+- Clean rerun: disable the timer, remove `.agents/systemd-logs/<unit>` if desired, then reinstall with new settings
+- Smoke test: run the installer with `SKIP_SYSTEMCTL=1 --start-now` to confirm files and command lines without enabling timers
+
 #### Resume a Failed Workflow Run
 
 If a workflow fails at a specific step, you can resume it from that step without re-running completed steps:
 
 ```bash
 # Resume from a specific step (e.g., code_review)
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/project \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
@@ -218,7 +290,7 @@ python -m agent_orchestrator run \
 ```
 
 **How it works:**
-- The orchestrator loads the existing run state from `.agents/run_state.json`
+- The orchestrator locates the most recent `.agents/runs/<run_id>/run_state.json` and loads its state
 - Resets the specified step and all downstream dependent steps to `PENDING`
 - Preserves all completed upstream steps (e.g., `fetch_github_issue`, `github_issue_plan`, `coding_impl`)
 - Resumes execution from the specified step with a fresh attempt counter
@@ -232,13 +304,13 @@ python -m agent_orchestrator run \
 **Example scenario:**
 ```bash
 # Initial run fails at code_review step
-python -m agent_orchestrator run --repo . \
+python -m agent_orchestrator.cli run --repo . \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
 # ... workflow runs: fetch_github_issue (✓), github_issue_plan (✓), coding_impl (✓), code_review (✗)
 
 # Fix the issue that caused code_review to fail, then resume
-python -m agent_orchestrator run --repo . \
+python -m agent_orchestrator.cli run --repo . \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
   --start-at-step code_review
@@ -249,36 +321,29 @@ python -m agent_orchestrator run --repo . \
 
 ### Step 5: Understanding Output and Artifacts
 
-When you run the orchestrator, it creates a structured output in your target repository:
+When you run the orchestrator, it creates structured output under `.agents/` inside your target repository:
 
 ```
 your-target-repo/
-├── .agents/                          # Orchestrator working directory
-│   ├── run_state.json               # Current execution state
-│   ├── prompts/                     # Custom prompt overrides (optional)
-│   │   ├── 02_coding.md             # Override default coding prompt
-│   │   └── 05_docs.md               # Override default docs prompt
-│   ├── run_reports/                 # Agent execution reports
-│   │   └── {run_id}__{step_id}.json
-│   ├── logs/                        # Agent stdout/stderr logs
-│   │   └── {run_id}__{step_id}__attempt{N}.log
-│   ├── plan/                        # Planning artifacts
-│   │   └── tasks.yaml
-│   ├── manual/                      # Manual testing plans
-│   │   └── MANUAL_TEST_PLAN.md
-│   ├── review/                      # Code review reports
-│   │   └── REVIEW.md
-│   ├── pr/                          # PR metadata
-│   │   └── metadata.json
-│   └── runs/                        # Archived runs when worktrees are cleaned up
-│       └── <run_id>/                # Copied logs and reports from the run
-├── backlog/                         # Strategic planning outputs
-│   ├── architecture_alignment.md
-│   └── tech_debt.md
-├── PLAN.md                          # High-level project plan
-├── CHANGELOG.md                     # Updated with new features
-└── (your existing code...)
+└── .agents/                         # Orchestrator working directory
+    ├── prompts/                    # Optional prompt overrides
+    └── runs/                       # One folder per workflow run
+        └── <run_id>/               # e.g., f8c1a491
+            ├── reports/            # JSON run reports per step
+            │   └── <run_id>__<step_id>.json
+            ├── logs/               # stdout/stderr captured for each attempt
+            │   └── <run_id>__<step_id>__attemptN.log
+            ├── artifacts/          # Files emitted via $ARTIFACTS_DIR (diffs, docs, etc.)
+            ├── manual_inputs/      # Created when --pause-for-human-input is enabled
+            └── run_state.json      # Persisted workflow state for --start-at-step resumes
 ```
+
+Per-run folders under `.agents/runs/<run_id>/` are created for every workflow launch, even without git worktrees, so you can safely inspect `reports/`, `logs/`, `artifacts/`, and the persisted `run_state.json` without interfering with a live run. The `manual_inputs/` directory appears only when you pass `--pause-for-human-input` and serves as the drop location for approval files. Agent-generated artifacts (like planning inventories or review notes) are stored under `artifacts/` using per-step subdirectories.
+
+Key takeaways:
+- Review `reports/` for per-step summaries and `logs/` for raw stdout/stderr before debugging a failure.
+- Use `run_state.json` together with `--start-at-step` to resume a workflow without re-running completed steps.
+- Prefer deleting the entire `.agents/runs/<run_id>/` folder (or starting a new `--run-id`) to reset state instead of editing `run_state.json` in place.
 
 ### Step 6: Customizing Agent Behavior with Prompt Overrides
 
@@ -335,7 +400,7 @@ EOF
 When you run the orchestrator, it will automatically use your custom prompts when they exist:
 
 ```bash
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/project \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
@@ -361,7 +426,7 @@ You can override any of these standard prompts:
 #### Human-in-the-Loop Integration
 Enable manual steps that require human input:
 ```bash
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/project \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
@@ -372,7 +437,7 @@ When a manual step is reached, provide input via:
 ```bash
 # The orchestrator will wait for this file
 echo '{"approved": true, "comments": "LGTM"}' > \
-  /path/to/your/project/.agents/run_inputs/{run_id}__{step_id}.json
+  /path/to/your/project/.agents/runs/<run_id>/manual_inputs/<run_id>__<step_id>.json
 ```
 
 #### CI/CD Integration with Gates
@@ -381,7 +446,7 @@ Use gate conditions to control workflow progression:
 # Create gate state file
 echo '{"ci.tests": true, "security.scan": true}' > gates.json
 
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/project \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
@@ -390,7 +455,7 @@ python -m agent_orchestrator run \
 
 #### Custom Working Directory and Logs
 ```bash
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/project \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
@@ -491,14 +556,14 @@ When your code review agent detects critical issues, it should return:
 
 ```bash
 # Run with custom max iterations (default: 4)
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/project \
   --workflow src/agent_orchestrator/workflows/workflow_code_review_loop.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
   --max-iterations 3  # Allow up to 3 loop-back iterations
 
 # Combine with max attempts for resilience
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/your/project \
   --workflow workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
@@ -531,10 +596,11 @@ python -m agent_orchestrator run \
 #### View Execution Status
 ```bash
 # Check current run state
-cat /path/to/your/project/.agents/run_state.json
+ls /path/to/your/project/.agents/runs
+cat /path/to/your/project/.agents/runs/<run_id>/run_state.json
 
 # Monitor logs in real-time
-tail -f /path/to/your/project/.agents/logs/*.log
+tail -f /path/to/your/project/.agents/runs/<run_id>/logs/*.log
 ```
 
 #### Common Command-Line Options
@@ -549,14 +615,14 @@ tail -f /path/to/your/project/.agents/logs/*.log
 **Common Issues:**
 1. **Missing Agent Binary**: Ensure `codex exec` or your agent runner is in PATH
 2. **Permission Errors**: Check write permissions on target repository
-3. **Failed Steps**: Review logs in `.agents/logs/` directory
+3. **Failed Steps**: Review logs in `.agents/runs/<run_id>/logs/`
 4. **Workflow Validation**: Verify YAML syntax and step dependencies
-5. **Run Report JSON Errors**: Transient parse failures are retried automatically; persistent issues raise `RunReportError` with the offending file path—inspect the JSON in `.agents/run_reports/` to fix formatting.
+5. **Run Report JSON Errors**: Transient parse failures are retried automatically; persistent issues raise `RunReportError` with the offending file path—inspect the JSON in `.agents/runs/<run_id>/reports/` to fix formatting.
 
 **Getting Help:**
 ```bash
-python -m agent_orchestrator --help
-python -m agent_orchestrator run --help
+python -m agent_orchestrator.cli --help
+python -m agent_orchestrator.cli run --help
 ```
 
 ## Technical Architecture
@@ -625,11 +691,10 @@ steps:
 git clone https://github.com/yourorg/ecommerce-site.git
 cd path/to/agent_orchestrator
 
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli --log-level INFO run \
   --repo ../ecommerce-site \
   --workflow src/agent_orchestrator/workflows/workflow_backlog_miner.yaml \
-  --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
-  --log-level INFO
+  --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py
 ```
 
 ### Example: Feature Development Pipeline
@@ -639,7 +704,7 @@ cd your-project
 git checkout -b feature/user-authentication
 
 cd path/to/agent_orchestrator
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo ../your-project \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \

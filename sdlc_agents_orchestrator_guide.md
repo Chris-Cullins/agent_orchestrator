@@ -25,24 +25,36 @@ Each agent run writes a **Run Report** JSON file that the orchestrator monitors 
 
 ## What You Get
 
-- **A tiny orchestrator** that reads `src/agent_orchestrator/workflows/workflow.yaml`, launches a wrapper (your `codex exec` shim), and watches for **Run Report** files.
+- **A production orchestrator** that loads `src/agent_orchestrator/workflows/workflow.yaml`, invokes the configured wrapper, and reacts to **Run Report** files.
 - **Prompt templates** for the agents you listed (planner, coding, e2e, manual testing, docs, code review, PR manager).
-- **A single completion contract**: agents write `run_report.json` files to the repo under `./.agents/run_reports/`.
-- **A working demo repo** so you can run end‑to‑end immediately.
+- **A single completion contract**: every step writes `<run_id>__<step_id>.json` to `<repo>/.agents/runs/<run_id>/reports/`.
+- **Guaranteed per-run scaffolding** under `<repo>/.agents/runs/<run_id>/`—reports, logs, artifacts, optional `manual_inputs/`, and `run_state.json` for resume support.
 
 ---
 
 ## Quick Start
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+pip install -e .
 
-# Run the orchestrator against the demo repo and default workflow
-python -m agent_orchestrator run --repo ./demo_repo --workflow ./src/agent_orchestrator/workflows/workflow.yaml
+# Optional: confirm your wrappers are reachable or set explicit binaries
+codex --version  # For Codex runs (optional)
+claude --version # For Claude runs (optional)
+# export CODEX_EXEC_BIN=/absolute/path/to/codex
+# export CLAUDE_CLI_BIN=/absolute/path/to/claude
+
+python -m agent_orchestrator.cli run \
+  --repo /absolute/path/to/your/target/repo \
+  --workflow src/agent_orchestrator/workflows/workflow_pr_review_fix.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
 ```
 
-You should see steps run in order and `*.json` appear in `demo_repo/.agents/run_reports/`.
+If you skip the editable install, prefix orchestrator commands with `PYTHONPATH=src` so Python resolves the package.
+
+Each run creates `<target-repo>/.agents/runs/<run_id>/` with `reports/`, `logs/`, `artifacts/`, and (when you pass `--pause-for-human-input`) a `manual_inputs/` directory plus the persisted `run_state.json` used by `--start-at-step` resumes.
 
 ---
 
@@ -52,7 +64,7 @@ You should see steps run in order and `*.json` appear in `demo_repo/.agents/run_
 
 **Completion signal (required):**
 
-- Path: `<repo>/.agents/run_reports/<run_id>__<step_id>.json`  
+- Path: `<repo>/.agents/runs/<run_id>/reports/<run_id>__<step_id>.json`  
 - Schema: `schemas/run_report.schema.json`  
 - Required fields: `schema, run_id, step_id, agent, status, started_at, ended_at`  
 - `status`: `"COMPLETED"` or `"FAILED"`
@@ -69,7 +81,7 @@ RUN_REPORT_JSON>>>
 **Validation guardrails:** The orchestrator and bundled wrappers now reject run reports that keep placeholder artifact or log entries (for example, "<REPLACE ME>"). Always emit concrete artifact paths and log summaries before marking a step complete.
 
 **Recommended env to pass into agents:**
-- `RUN_ID`, `STEP_ID`, `REPO_DIR`, `REPORT_PATH`
+- `RUN_ID`, `STEP_ID`, `REPO_DIR`, `REPORT_PATH`, `ARTIFACTS_DIR`
 
 **Idempotency:** agents should be safe to re‑run; dedupe with `run_id + step_id`.
 
@@ -151,9 +163,13 @@ Prompt templates live under `prompts/*.md` and each ends with the same instructi
 
 **Big picture:** a tiny scheduler that loads a DAG, launches steps async, and advances when it sees Run Reports on disk.
 
-### Module constant
+### Run directory layout
 ```python
-REPORTS_DIR = ".agents/run_reports"
+self._run_dir = repo_dir / ".agents" / "runs" / run_id
+self._reports_dir = self._run_dir / "reports"
+self._logs_dir = self._run_dir / "logs"
+self._artifacts_dir = self._run_dir / "artifacts"
+self._manual_inputs_dir = self._run_dir / "manual_inputs"
 ```
 
 ### Data classes
@@ -171,10 +187,10 @@ class StepRuntime:   # dynamic state while running
 ### Orchestrator lifecycle
 
 **`__init__(repo_dir, workflow_path)`**
-- Loads YAML into `Step` objects, builds `self.step_index`
+- Loads YAML into `Step` objects and builds `self.step_index`
 - Creates a short `run_id`
-- Initializes per‑step runtime state
-- Ensures `<repo>/.agents/run_reports` exists
+- Initializes per-step runtime state
+- Creates `<repo>/.agents/runs/<run_id>/` with `reports/`, `logs/`, `artifacts/`, optional `manual_inputs/`, and `run_state.json`
 
 **`_load_workflow(path)`**
 - Parses YAML and constructs typed steps
@@ -191,13 +207,13 @@ class StepRuntime:   # dynamic state while running
 
 **`_launch(step_id)`**
 - Marks step `RUNNING`, increments attempts
-- Computes `report_path = <repo>/.agents/run_reports/<run_id>__<step_id>.json`
+- Computes `report_path = <repo>/.agents/runs/<run_id>/reports/<run_id>__<step_id>.json`
 - `subprocess.Popen` invokes the wrapper (configurable via CLI):
   ```bash
-  python -m agent_orchestrator run \
+  python -m agent_orchestrator.cli run \
     --repo <repo_dir> \
     --workflow <workflow_path> \
-    --wrapper <wrapper_path
+    --wrapper <wrapper_path>
   ```
 - Non‑blocking; multiple independent steps can run concurrently
 
@@ -225,7 +241,7 @@ if all_done or (any_failed and nothing_left):
 
 ### Runtime feel (typical log)
 ```
-[orchestrator] run_id=3f2c9a1b repo=/path/to/demo_repo
+[orchestrator] run_id=3f2c9a1b repo=/path/to/target_repo
 [orchestrator] starting workflow
 [orchestrator] launching step=plan agent=work_planner
 [orchestrator] step=plan finished status=COMPLETED
@@ -244,7 +260,7 @@ It shells out to `codex exec`, forwards extra CLI arguments, streams logs, and g
 report even when the agent forgets to emit one. Example:
 
 ```bash
-python -m agent_orchestrator run \
+python -m agent_orchestrator.cli run \
   --repo /path/to/repo \
   --workflow src/agent_orchestrator/workflows/workflow.yaml \
   --wrapper src/agent_orchestrator/wrappers/codex_wrapper.py \
@@ -254,14 +270,14 @@ python -m agent_orchestrator run \
 
 Always pass the full or relative path to the wrapper script—the CLI does not search inside `src/agent_orchestrator/wrappers/` for you.
 
-Useful flags:
-- `--codex-bin` / `CODEX_EXEC_BIN` to pick the binary.
-- `--timeout` to cap runtime.
-- `--working-dir` to override the cwd (defaults to the repo).
-- `--max-iterations` to cap loop-back cycles before the orchestrator marks a step failed.
-- Repeat `--wrapper-arg` to pass additional arguments through to `codex exec`.
+Useful overrides:
+- Pass `--wrapper-arg --codex-bin` or export `CODEX_EXEC_BIN` to choose a custom Codex binary (Claude wrapper honors `--wrapper-arg --claude-bin` and `CLAUDE_CLI_BIN`).
+- Add `--wrapper-arg --timeout` to cap wrapper runtime in seconds.
+- Add `--wrapper-arg --working-dir /alt/path` to change the Codex working directory (defaults to the repo checkout).
+- Use multiple `--wrapper-arg` values to forward additional Codex/Claude CLI options after the wrapper-managed flags.
+- Combine with orchestrator flags such as `--max-iterations`, `--max-attempts`, and `--pause-for-human-input` when you need tighter control.
 
-The wrapper passes `RUN_ID`, `STEP_ID`, `REPO_DIR`, and `REPORT_PATH` env vars to the subprocess
+The wrapper passes `RUN_ID`, `STEP_ID`, `REPO_DIR`, `REPORT_PATH`, and `ARTIFACTS_DIR` env vars to the subprocess
 and looks for `<<<RUN_REPORT_JSON ... RUN_REPORT_JSON>>>` markers in stdout; if absent it synthesizes
 a report so the rest of the workflow can continue.
 
@@ -269,13 +285,12 @@ a report so the rest of the workflow can continue.
 
 ## Reliability & Scale
 
-- **Idempotency**: name work dirs/branches with `run_id__step_id`; skip if report exists & completed.
-- **Retries & iteration caps**: exponential backoff + cap attempts; track `iteration_count` per step and enforce `--max-iterations` to avoid infinite loop-back cycles.
-- **Run report ingestion**: transient JSON parse failures are retried automatically and ultimately reported as `RunReportError` with the source path for quick triage.
-- **Concurrency**: per‑repo limits; global WIP; fair scheduling.
-- **Timeouts**: hard caps per step; collect partial logs on cancel.
-- **Compensation**: trigger follow‑up workflows for rollbacks or fixes when late gates fail.
-- **Observability**: structure logs; add OpenTelemetry spans around each step.
+- **Per-run isolation**: every launch receives a unique `run_id` and dedicated `.agents/runs/<run_id>/` directory so retries never clobber prior attempts.
+- **Retries & loop-back caps**: configurable `--max-attempts` retries failed steps, and `--max-iterations` guards against infinite loop-backs when gates fail.
+- **Run report ingestion**: transient JSON parse failures are retried automatically and ultimately surface a `RunReportError` with the full path for investigation.
+- **Wrapper safety valves**: Codex/Claude wrappers expose `--timeout`, `--working-dir`, and binary override flags to keep external processes predictable.
+- **Resume support**: `run_state.json` persists in each run directory so `--start-at-step` can rewind a specific step without losing upstream progress.
+- **Concurrent readiness**: the orchestrator launches any dependency-satisfied steps immediately, so parallel branches progress in lockstep without manual scheduling.
 
 ---
 
@@ -310,46 +325,36 @@ a report so the rest of the workflow can continue.
 ## Appendix A: File Layout
 
 ```
-src/
-  agent_orchestrator/
-    __init__.py
-    __main__.py
-    cli.py
-    orchestrator.py
-    runner.py
-    workflow.py
-    reporting.py
-    time_utils.py
-    gating.py
-    state.py
-    wrappers/
-      claude_wrapper.py
-      codex_wrapper.py
-      mock_wrapper.py
-README.md
-pyproject.toml
-requirements.txt
-sdlc_agents_poc/
-  orchestrator.py
-  src/agent_orchestrator/workflows/workflow.yaml
-  schemas/
-    run_report.schema.json
-  prompts/
-    01_planning.md
-    02_coding.md
-    03_e2e.md
-    04_manual.md
-    05_docs.md
-    06_code_review.md
-    07_pr_manager.md
-  docs/
-    AGENT_CONTRACT.md
-    ARCHITECTURE.md
-  demo_repo/
-    .agents/
-      run_reports/
-      artifacts/
-    README.md
+agent_orchestrator/
+├── src/agent_orchestrator/
+│   ├── cli.py
+│   ├── orchestrator.py
+│   ├── runner.py
+│   ├── workflow.py
+│   ├── reporting.py
+│   ├── time_utils.py
+│   ├── gating.py
+│   ├── state.py
+│   ├── prompts/
+│   ├── workflows/
+│   └── wrappers/
+│       ├── claude_wrapper.py
+│       └── codex_wrapper.py
+├── tests/
+├── AGENTS.md
+├── PLAN.md
+├── README.md
+├── requirements.txt
+└── sdlc_agents_orchestrator_guide.md
+
+target-repo/
+└── .agents/
+    └── runs/<run_id>/
+        ├── reports/
+        ├── logs/
+        ├── artifacts/
+        ├── manual_inputs/  # created when --pause-for-human-input is enabled
+        └── run_state.json
 ```
 
 ---
@@ -367,7 +372,7 @@ sdlc_agents_poc/
   "ended_at":   "2025-09-30T12:05:42Z",
   "artifacts": [
     "path/to/branch-or-diff",
-    "demo_repo/.agents/artifacts/3f2c9a1b__code/artifact.txt"
+    "target_repo/.agents/runs/3f2c9a1b/artifacts/code/diff.patch"
   ],
   "metrics": {
     "tokens_in": 0,
