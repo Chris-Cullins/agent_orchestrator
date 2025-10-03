@@ -170,8 +170,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         "REPO_DIR": args.repo,
         "PROMPT_PATH": args.prompt,
         "REPORT_PATH": args.report,
-        # Make sure claude is in PATH
-        "PATH": f"/opt/homebrew/bin:{env.get('PATH', '')}"
     })
 
     cwd = args.working_dir or args.repo

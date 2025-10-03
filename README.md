@@ -26,9 +26,23 @@ pip install -r requirements.txt
 
 # Install the agent_orchestrator package
 pip install -e .
+```
 
-# Configure PATH for codex (if using Homebrew installation)
-export PATH="/opt/homebrew/bin:/opt/homebrew/Cellar/node/24.5.0/bin:$PATH"
+**Note**: If your AI agent binaries (`claude` or `codex`) are not in your system PATH, you can either:
+- Add them to your PATH: `export PATH="/path/to/binaries:$PATH"`
+- Use the `--claude-bin` or `--codex-bin` wrapper arguments to specify the binary location
+- Set the `CLAUDE_CLI_BIN` or `CODEX_EXEC_BIN` environment variables
+
+```bash
+# Example: Using environment variables
+export CLAUDE_CLI_BIN=/path/to/claude
+export CODEX_EXEC_BIN=/path/to/codex
+
+# Example: Using wrapper arguments
+python -m agent_orchestrator run \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
+  --wrapper-arg --claude-bin \
+  --wrapper-arg /path/to/claude
 ```
 
 ### Step 2: Choose Your Workflow
