@@ -64,9 +64,12 @@ def build_codex_command(
     prompt_path = Path(args.prompt)
     if not prompt_path.exists():
         raise FileNotFoundError(f"Prompt file not found: {args.prompt}")
-    
+
     with open(prompt_path, 'r', encoding='utf-8') as f:
         prompt_content = f.read()
+
+    # Replace {run_id} placeholder with actual run_id
+    prompt_content = prompt_content.replace("{run_id}", args.run_id)
     
     # Enhance the prompt with context about the task
     enhanced_prompt = f"""You are an AI agent named "{args.agent}" working on a software development task.

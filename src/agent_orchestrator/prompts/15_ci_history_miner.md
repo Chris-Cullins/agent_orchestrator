@@ -4,13 +4,13 @@ Goal: Mine CI/CD pipeline history to identify intermittent test failures and col
 
 ## Deliverables
 
-- Analysis report in `.agents/flaky_tests/ci_analysis.json` containing:
+- Analysis report in `.agents/runs/{run_id}/artifacts/flaky_tests/ci_analysis.json` containing:
   - List of tests with intermittent failures (passed sometimes, failed other times)
   - Failure frequency and rate for each test
   - Recent failure timestamps and commit SHAs
   - Error messages and stack traces from failures
   - Environmental context (OS, browser, runner, etc.)
-- Summary report in `.agents/flaky_tests/summary.md` with:
+- Summary report in `.agents/runs/{run_id}/artifacts/flaky_tests/summary.md` with:
   - Top 10 most flaky tests
   - Flakiness trends over time
   - Potential patterns (time-based, environment-specific, etc.)
@@ -83,8 +83,8 @@ Write a run report JSON to `${REPORT_PATH}` with:
   "total_test_runs_analyzed": 450,
   "analysis_period_days": 30,
   "artifacts": [
-    ".agents/flaky_tests/ci_analysis.json",
-    ".agents/flaky_tests/summary.md"
+    ".agents/runs/{run_id}/artifacts/flaky_tests/ci_analysis.json",
+    ".agents/runs/{run_id}/artifacts/flaky_tests/summary.md"
   ],
   "notes": "Analyzed GitHub Actions workflow runs for main branch"
 }

@@ -22,7 +22,7 @@ The workflow configuration defines priority labels in order from highest to lowe
 - `gh issue view` - Get full details of selected issue
 
 ## Output Requirements
-Create a JSON artifact: `.agents/issue_selection.json` with:
+Create a JSON artifact: `.agents/runs/{run_id}/artifacts/issue_selection.json` with:
 ```json
 {
   "selected_issue": {
@@ -47,7 +47,7 @@ Create a JSON artifact: `.agents/issue_selection.json` with:
 }
 ```
 
-Also create a markdown summary: `.agents/issue_selection.md` with:
+Also create a markdown summary: `.agents/runs/{run_id}/artifacts/issue_selection.md` with:
 ```markdown
 # Issue Selection Report
 
@@ -80,8 +80,8 @@ This issue will now be worked through the full SDLC pipeline:
 
 ## Error Handling
 If NO issues match the criteria:
-- Create `.agents/issue_selection.json` with `"selected_issue": null`
-- Create `.agents/issue_selection.md` explaining no matching issues found
+- Create `.agents/runs/{run_id}/artifacts/issue_selection.json` with `"selected_issue": null`
+- Create `.agents/runs/{run_id}/artifacts/issue_selection.md` explaining no matching issues found
 - Exit with appropriate message
 
 ## Example Commands
