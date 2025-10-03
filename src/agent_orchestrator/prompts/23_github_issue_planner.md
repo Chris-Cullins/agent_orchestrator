@@ -3,11 +3,11 @@
 Goal: Convert a GitHub issue into a minimal plan and task breakdown for this repo.
 
 Input:
-- Read the GitHub issue file `gh_issue_*.md` at repo root (there should be exactly one)
+- Read the GitHub issue file `${ARTIFACTS_DIR}/gh_issue_*.md` (there should be exactly one)
 - This file contains the full issue details including title, description, labels, and metadata
 
 Task:
-1. Locate and read the `gh_issue_*.md` file in the repo root
+1. Locate and read the `${ARTIFACTS_DIR}/gh_issue_*.md` file
 2. Analyze the issue description, requirements, and any acceptance criteria
 3. Break down the work into concrete, actionable tasks
 4. Create a development plan with clear milestones
