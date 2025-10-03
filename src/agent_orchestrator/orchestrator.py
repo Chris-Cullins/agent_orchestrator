@@ -148,6 +148,9 @@ class Orchestrator:
 
             prompt_path = self._resolve_prompt_path(step.prompt)
 
+            # Collect artifacts from dependency steps
+            dep_artifacts_env = self._collect_dependency_artifacts(step)
+
             runtime.status = StepStatus.RUNNING
             runtime.attempts += 1
             runtime.started_at = utc_now()
@@ -164,6 +167,7 @@ class Orchestrator:
                     attempt=runtime.attempts,
                     artifacts_dir=self._artifacts_dir,
                     logs_dir=self._logs_dir,
+                    extra_env=dep_artifacts_env,
                 )
             except Exception as exc:  # pragma: no cover
                 runtime.status = StepStatus.FAILED
@@ -274,6 +278,34 @@ class Orchestrator:
                 self._log.info("gate blocked step=%s gate=%s", step.id, gate)
                 return False
         return True
+
+    def _collect_dependency_artifacts(self, step: Step) -> Dict[str, str]:
+        """Collect artifacts from dependency steps and return as environment variables."""
+        env = {}
+        for dep_id in step.needs:
+            dep_runtime = self._state.steps.get(dep_id)
+            if not dep_runtime or not dep_runtime.artifacts:
+                continue
+
+            # Add each artifact as DEP_<STEP_ID>_ARTIFACT_<INDEX>
+            for idx, artifact in enumerate(dep_runtime.artifacts):
+                # Convert artifact path to absolute path relative to repo
+                artifact_path = Path(artifact)
+                if not artifact_path.is_absolute():
+                    artifact_path = self._repo_dir / artifact_path
+
+                env_key = f"DEP_{dep_id.upper()}_ARTIFACT_{idx}"
+                env[env_key] = str(artifact_path)
+
+            # Also add a summary variable with all artifacts (comma-separated)
+            if dep_runtime.artifacts:
+                artifact_paths = [
+                    str(self._repo_dir / Path(a)) if not Path(a).is_absolute() else str(a)
+                    for a in dep_runtime.artifacts
+                ]
+                env[f"DEP_{dep_id.upper()}_ARTIFACTS"] = ",".join(artifact_paths)
+
+        return env
 
     def _resolve_prompt_path(self, prompt: str) -> Path:
         candidate = Path(prompt)

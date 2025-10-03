@@ -5,18 +5,18 @@ Goal: Rewrite flaky tests based on identified patterns and root causes to elimin
 ## Input
 
 Read analysis from previous steps:
-- `.agents/flaky_tests/flake_patterns.json` - Categorized flaky tests with fix recommendations
-- `.agents/flaky_tests/patterns.md` - Common patterns and anti-patterns
+- `.agents/runs/{run_id}/artifacts/flaky_tests/flake_patterns.json` - Categorized flaky tests with fix recommendations
+- `.agents/runs/{run_id}/artifacts/flaky_tests/patterns.md` - Common patterns and anti-patterns
 
 ## Deliverables
 
 - Rewritten test files with fixes applied
-- Test modification report in `.agents/flaky_tests/rewrites.json` containing:
+- Test modification report in `.agents/runs/{run_id}/artifacts/flaky_tests/rewrites.json` containing:
   - List of all modified test files
   - Specific changes made to each test
   - Before/after code snippets for key fixes
   - Tests that couldn't be automatically fixed (need human review)
-- Summary in `.agents/flaky_tests/rewrite_summary.md` with:
+- Summary in `.agents/runs/{run_id}/artifacts/flaky_tests/rewrite_summary.md` with:
   - Count of tests fixed by category
   - Explanation of common fixes applied
   - Verification steps for human review
@@ -119,8 +119,8 @@ Write a run report JSON to `${REPORT_PATH}` with:
     "tests/integration/api.test.js"
   ],
   "artifacts": [
-    ".agents/flaky_tests/rewrites.json",
-    ".agents/flaky_tests/rewrite_summary.md"
+    ".agents/runs/{run_id}/artifacts/flaky_tests/rewrites.json",
+    ".agents/runs/{run_id}/artifacts/flaky_tests/rewrite_summary.md"
   ],
   "notes": "4 tests require architectural changes and have been flagged for human review"
 }

@@ -5,16 +5,16 @@ Goal: Analyze identified flaky tests to determine root causes and classify failu
 ## Input
 
 Read the CI analysis report from the previous step:
-- `.agents/flaky_tests/ci_analysis.json` - List of flaky tests with failure data
+- `.agents/runs/{run_id}/artifacts/flaky_tests/ci_analysis.json` - List of flaky tests with failure data
 
 ## Deliverables
 
-- Detailed analysis report in `.agents/flaky_tests/flake_patterns.json` containing:
+- Detailed analysis report in `.agents/runs/{run_id}/artifacts/flaky_tests/flake_patterns.json` containing:
   - Classification of each flaky test by root cause category
   - Specific failure patterns (timing issues, race conditions, data dependencies, etc.)
   - Recommendations for fixes (e.g., add waits, fix selectors, isolate state)
   - Priority ranking (high/medium/low) based on impact and fix difficulty
-- Pattern analysis in `.agents/flaky_tests/patterns.md` with:
+- Pattern analysis in `.agents/runs/{run_id}/artifacts/flaky_tests/patterns.md` with:
   - Common anti-patterns found across tests
   - Shared failure characteristics
   - Suggested refactoring approaches
@@ -94,8 +94,8 @@ Write a run report JSON to `${REPORT_PATH}` with:
   },
   "high_priority_fixes": 4,
   "artifacts": [
-    ".agents/flaky_tests/flake_patterns.json",
-    ".agents/flaky_tests/patterns.md"
+    ".agents/runs/{run_id}/artifacts/flaky_tests/flake_patterns.json",
+    ".agents/runs/{run_id}/artifacts/flaky_tests/patterns.md"
   ],
   "notes": "Identified 3 tests sharing the same race condition pattern"
 }

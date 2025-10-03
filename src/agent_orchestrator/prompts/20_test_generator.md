@@ -5,17 +5,17 @@ Goal: Generate comprehensive unit tests for files identified by the Coverage Ana
 ## Deliverables
 
 - Generated test files written to appropriate test directories following project conventions
-- Test generation report in `.agents/coverage_gaps/test_generation.json` containing:
+- Test generation report in `.agents/runs/{run_id}/artifacts/coverage_gaps/test_generation.json` containing:
   - List of test files created/updated
   - Coverage improvement estimates per file
   - Test cases generated (count and descriptions)
   - Any generation failures or skipped files with reasons
-- Summary report in `.agents/coverage_gaps/test_summary.md`
+- Summary report in `.agents/runs/{run_id}/artifacts/coverage_gaps/test_summary.md`
 
 ## Input
 
 Read the coverage analysis from the previous step:
-- `.agents/coverage_gaps/analysis.json`: Contains prioritized files and uncovered lines
+- `.agents/runs/{run_id}/artifacts/coverage_gaps/analysis.json`: Contains prioritized files and uncovered lines
 
 Process the top priority files (up to 20) from the analysis.
 
@@ -175,8 +175,8 @@ Write a run report JSON to `${REPORT_PATH}` with:
   "test_cases_generated": 142,
   "estimated_coverage_improvement": 28.5,
   "artifacts": [
-    ".agents/coverage_gaps/test_generation.json",
-    ".agents/coverage_gaps/test_summary.md"
+    ".agents/runs/{run_id}/artifacts/coverage_gaps/test_generation.json",
+    ".agents/runs/{run_id}/artifacts/coverage_gaps/test_summary.md"
   ],
   "notes": "Generated 142 test cases across 18 files. Estimated coverage improvement: +28.5%"
 }

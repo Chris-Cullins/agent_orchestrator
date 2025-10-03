@@ -5,7 +5,7 @@ Goal: Read the architecture alignment and tech debt reports, then consolidate th
 Input Sources:
 - `backlog/architecture_alignment.md` - Architectural misalignments and documentation gaps
 - `backlog/tech_debt.md` - Technical debt items, code quality issues, and tooling gaps
-- `.agents/review/REVIEW.md` - This contains code review comments that need to be addressed.
+- `.agents/runs/{run_id}/artifacts/REVIEW.md` - This contains code review comments that need to be addressed.
 - `backlog/HUMAN-INPUT.md` - This contains todos given to the workflow from a human, they will often need elaboration to fill out more details.
 
 Deliverables:

@@ -5,8 +5,8 @@ Goal: Quarantine tests that remain flaky after rewriting attempts, preventing th
 ## Input
 
 Read from previous steps:
-- `.agents/flaky_tests/rewrites.json` - Tests that were rewritten and tests flagged for review
-- `.agents/flaky_tests/flake_patterns.json` - Original flakiness analysis
+- `.agents/runs/{run_id}/artifacts/flaky_tests/rewrites.json` - Tests that were rewritten and tests flagged for review
+- `.agents/runs/{run_id}/artifacts/flaky_tests/flake_patterns.json` - Original flakiness analysis
 
 ## Deliverables
 
@@ -14,14 +14,14 @@ Read from previous steps:
   - Mark tests with `.skip()` or `.todo()` in test files
   - OR move tests to separate quarantine suite (e.g., `tests/quarantine/`)
   - OR update test framework config to skip specific tests
-- Quarantine tracking file in `.agents/flaky_tests/quarantine.json` containing:
+- Quarantine tracking file in `.agents/runs/{run_id}/artifacts/flaky_tests/quarantine.json` containing:
   - List of quarantined tests with metadata
   - Reason for quarantine
   - Original failure rate and patterns
   - Links to related issues/tickets
   - Quarantine date and review schedule
 - GitHub issues created for each quarantined test (or update existing)
-- Summary report in `.agents/flaky_tests/quarantine_summary.md`
+- Summary report in `.agents/runs/{run_id}/artifacts/flaky_tests/quarantine_summary.md`
 
 ## Quarantine Criteria
 
@@ -71,7 +71,7 @@ end
 
 For each quarantined test, create/update:
 
-1. **Quarantine record** in `.agents/flaky_tests/quarantine.json`:
+1. **Quarantine record** in `.agents/runs/{run_id}/artifacts/flaky_tests/quarantine.json`:
 ```json
 {
   "test_name": "e2e/checkout.spec.ts > checkout flow > completes payment",
@@ -160,8 +160,8 @@ Write a run report JSON to `${REPORT_PATH}` with:
   "tests_fixed": 11,
   "total_flaky_tests_resolved": 11,
   "artifacts": [
-    ".agents/flaky_tests/quarantine.json",
-    ".agents/flaky_tests/quarantine_summary.md"
+    ".agents/runs/{run_id}/artifacts/flaky_tests/quarantine.json",
+    ".agents/runs/{run_id}/artifacts/flaky_tests/quarantine_summary.md"
   ],
   "notes": "4 tests quarantined pending architectural changes. 11 tests successfully fixed and verified stable.",
   "next_review_date": "2025-11-01"
