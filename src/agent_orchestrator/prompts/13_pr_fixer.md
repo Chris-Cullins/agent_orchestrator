@@ -9,7 +9,9 @@ Goal: Fix issues identified in PR review comments and commit changes back to the
 - Consider using a dry-run mode or requiring human approval for critical changes
 
 Tasks:
-1. Read TODO items from `${ARTIFACTS_DIR}/pr_reviews/todos.json`
+1. Read TODO items from the previous step's artifact
+   - First, check if `${DEP_CREATE_TODOS_ARTIFACT_0}` environment variable is set (this contains the path to todos.json from the create_todos step)
+   - If not set, fall back to `${ARTIFACTS_DIR}/pr_reviews/todos.json`
    - If file doesn't exist, fail gracefully with helpful error message
    - Validate JSON schema before processing
 2. For each PR with TODOs:
