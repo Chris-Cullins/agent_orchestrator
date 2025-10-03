@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added comprehensive unit tests in `tests/test_prompt_resolution.py`
   - Added integration tests in `tests/test_prompt_override_integration.py`
   - Enables per-repository customization of agent behavior without modifying orchestrator codebase or workflow definitions
+- User-level systemd automation for recurring workflows (Issue #57)
+  - Added `src/agent_orchestrator/scripts/install_systemd_timer.sh` to generate service/timer units and helper scripts with safe locking, log handling, and uninstall support
+  - Documented CLI requirements, installer usage, and troubleshooting in README under "Automate Recurring Runs with systemd timers"
+  - Added regression coverage in `tests/test_systemd_install_script.py` to verify unit generation, idempotency, and uninstall flows
 
 ### Fixed
 - Remove hardcoded macOS-specific PATH injection from wrapper modules to improve cross-platform compatibility
@@ -58,6 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ensure `08_architect_repo_review.md` ends with the canonical run-report completion block so backlog architect runs emit concrete reports
   - Appended the standard run-report instructions to `src/agent_orchestrator/prompts/08_architect_repo_review.md`
   - Added regression coverage in `tests/test_prompts_architect_repo_review.py`
+
+### Changed
+- Refreshed operator documentation (`README.md`, `AGENTS.md`, `sdlc_agents_orchestrator_guide.md`) to highlight `python -m agent_orchestrator.cli run`, wrapper binary overrides (`CODEX_EXEC_BIN` / `CLAUDE_CLI_BIN`), and the per-run `.agents/runs/<run_id>/` scaffolding (reports/logs/artifacts/manual_inputs/run_state.json) now guaranteed by the orchestrator.
+- Issue #20 traceability: README quick start, AGENTS Playbook, and the full orchestrator guide now clarify manual launch steps, resume expectations, and `.agents/runs/<run_id>/manual_inputs/` usage when `--pause-for-human-input` is set.
 
 ### Migration Guide
 If you have existing scripts or commands using the old wrapper references:
