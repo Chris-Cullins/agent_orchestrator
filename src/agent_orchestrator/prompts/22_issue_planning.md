@@ -7,7 +7,7 @@ You are a development architect that creates detailed implementation plans for G
 Convert the selected GitHub issue into a minimal plan and task breakdown for this repo.
 
 ## Input Sources
-**Primary Input**: Read `.agents/issue_selection.json` and `.agents/issue_selection.md` created by the issue picker agent.
+**Primary Input**: Read `.agents/runs/{run_id}/artifacts/issue_selection.json` and `.agents/runs/{run_id}/artifacts/issue_selection.md` created by the issue picker agent.
 
 These files contain:
 - Selected issue number, title, and full description
@@ -16,7 +16,7 @@ These files contain:
 - Selection criteria and rationale
 
 ## Task
-1. Read the selected issue details from `.agents/issue_selection.json`
+1. Read the selected issue details from `.agents/runs/{run_id}/artifacts/issue_selection.json`
 2. Analyze the issue requirements and acceptance criteria
 3. Break down the issue into actionable development tasks
 4. Create a detailed implementation plan
@@ -64,7 +64,7 @@ High-level implementation plan including:
 - [Risk 2 and mitigation]
 ```
 
-### 2. `tasks.yaml` in `.agents/plan/`
+### 2. `tasks.yaml` in `.agents/runs/{run_id}/artifacts/plan/`
 Detailed task breakdown with small, actionable items:
 ```yaml
 issue_reference:
@@ -113,7 +113,7 @@ gh issue comment [issue_number] --body "🤖 **Implementation Plan Created**
 
 A detailed implementation plan has been created and development is starting.
 
-See \`PLAN.md\` and \`.agents/plan/tasks.yaml\` for full details.
+See \`PLAN.md\` and \`.agents/runs/{run_id}/artifacts/plan/tasks.yaml\` for full details.
 
 **Milestones:**
 - [Milestone 1]
@@ -121,7 +121,7 @@ See \`PLAN.md\` and \`.agents/plan/tasks.yaml\` for full details.
 - [Milestone 3]"
 ```
 
-### 4. Create `.agents/plan/planning_summary.json`
+### 4. Create `.agents/runs/{run_id}/artifacts/plan/planning_summary.json`
 ```json
 {
   "issue_number": 123,
@@ -167,21 +167,21 @@ See \`PLAN.md\` and \`.agents/plan/tasks.yaml\` for full details.
 ### Read selected issue
 ```bash
 # Read the issue selection JSON
-cat .agents/issue_selection.json | jq .
+cat .agents/runs/{run_id}/artifacts/issue_selection.json | jq .
 
 # Get full issue details from GitHub
-gh issue view $(cat .agents/issue_selection.json | jq -r '.selected_issue.number')
+gh issue view $(cat .agents/runs/{run_id}/artifacts/issue_selection.json | jq -r '.selected_issue.number')
 ```
 
 ### Update issue status
 ```bash
-ISSUE_NUM=$(cat .agents/issue_selection.json | jq -r '.selected_issue.number')
+ISSUE_NUM=$(cat .agents/runs/{run_id}/artifacts/issue_selection.json | jq -r '.selected_issue.number')
 gh issue edit $ISSUE_NUM --add-label "status:in-progress" --remove-label "status:ready"
 gh issue comment $ISSUE_NUM --body "🤖 Implementation plan created. Development starting..."
 ```
 
 ## Success Criteria
-- ✅ Selected issue details successfully read from `.agents/issue_selection.json`
+- ✅ Selected issue details successfully read from `.agents/runs/{run_id}/artifacts/issue_selection.json`
 - ✅ `PLAN.md` created with comprehensive implementation plan
 - ✅ `tasks.yaml` created with detailed, actionable task breakdown
 - ✅ GitHub issue status updated to "in-progress"
@@ -191,7 +191,7 @@ gh issue comment $ISSUE_NUM --body "🤖 Implementation plan created. Developmen
 - ✅ Technical approach clearly documented
 
 ## Important Notes
-- **Issue Context**: ALWAYS read from `.agents/issue_selection.json` - don't pick from TODO.md
+- **Issue Context**: ALWAYS read from `.agents/runs/{run_id}/artifacts/issue_selection.json` - don't pick from TODO.md
 - **GitHub Integration**: Update the issue status so the team knows work has started
 - **Task Granularity**: Break work into small chunks for better tracking and rollback
 - **Acceptance Criteria**: Preserve all requirements from the original GitHub issue

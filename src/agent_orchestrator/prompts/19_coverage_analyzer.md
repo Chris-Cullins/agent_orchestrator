@@ -4,7 +4,7 @@ Goal: Identify files with low test coverage and detect coverage regressions in r
 
 ## Deliverables
 
-- Coverage analysis report in `.agents/coverage_gaps/analysis.json` containing:
+- Coverage analysis report in `.agents/runs/{run_id}/artifacts/coverage_gaps/analysis.json` containing:
   - List of files with coverage below threshold (default: 70%)
   - Coverage metrics per file: line coverage %, branch coverage %, uncovered lines
   - Diff coverage analysis: files with coverage delta < 0 in recent changes
@@ -12,7 +12,7 @@ Goal: Identify files with low test coverage and detect coverage regressions in r
     - Code complexity (cyclomatic complexity)
     - File change frequency (git history)
     - Critical path indicators (main/core modules)
-- Summary report in `.agents/coverage_gaps/summary.md` with:
+- Summary report in `.agents/runs/{run_id}/artifacts/coverage_gaps/summary.md` with:
   - Top 20 files needing coverage improvement
   - Diff coverage violations (recent PRs/commits with negative coverage delta)
   - Suggested test targets with rationale
@@ -147,8 +147,8 @@ Write a run report JSON to `${REPORT_PATH}` with:
   "diff_coverage_violations": 5,
   "top_priority_files": 20,
   "artifacts": [
-    ".agents/coverage_gaps/analysis.json",
-    ".agents/coverage_gaps/summary.md"
+    ".agents/runs/{run_id}/artifacts/coverage_gaps/analysis.json",
+    ".agents/runs/{run_id}/artifacts/coverage_gaps/summary.md"
   ],
   "notes": "Found 5 files with negative diff coverage. Prioritized 20 files for test generation."
 }

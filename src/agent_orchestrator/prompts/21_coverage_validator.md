@@ -4,20 +4,20 @@ Goal: Run generated tests to validate they pass and measure coverage improvement
 
 ## Deliverables
 
-- Test execution report in `.agents/coverage_gaps/validation.json` containing:
+- Test execution report in `.agents/runs/{run_id}/artifacts/coverage_gaps/validation.json` containing:
   - Test execution results (pass/fail counts)
   - Coverage metrics before and after
   - Coverage delta per file and overall
   - Gate validation results (pass/fail)
   - Failed tests with error messages
-- Validation summary in `.agents/coverage_gaps/validation_summary.md`
+- Validation summary in `.agents/runs/{run_id}/artifacts/coverage_gaps/validation_summary.md`
 - **PR creation** if all gates pass
 - **Rollback** if gates fail (remove generated test files and report)
 
 ## Input
 
 Read test generation results from previous step:
-- `.agents/coverage_gaps/test_generation.json`: List of generated test files
+- `.agents/runs/{run_id}/artifacts/coverage_gaps/test_generation.json`: List of generated test files
 
 ## Validation Process
 
@@ -262,8 +262,8 @@ Write a run report JSON to `${REPORT_PATH}` with:
   "pr_created": true,
   "pr_url": "https://github.com/user/repo/pull/123",
   "artifacts": [
-    ".agents/coverage_gaps/validation.json",
-    ".agents/coverage_gaps/validation_summary.md"
+    ".agents/runs/{run_id}/artifacts/coverage_gaps/validation.json",
+    ".agents/runs/{run_id}/artifacts/coverage_gaps/validation_summary.md"
   ],
   "notes": "All quality gates passed. PR created at https://github.com/user/repo/pull/123"
 }
@@ -278,8 +278,8 @@ Write a run report JSON to `${REPORT_PATH}` with:
   "tests_failed": 2,
   "rollback_completed": true,
   "artifacts": [
-    ".agents/coverage_gaps/validation.json",
-    ".agents/coverage_gaps/validation_summary.md"
+    ".agents/runs/{run_id}/artifacts/coverage_gaps/validation.json",
+    ".agents/runs/{run_id}/artifacts/coverage_gaps/validation_summary.md"
   ],
   "notes": "Quality gates failed. 2 tests failed. Rolled back generated test files."
 }
