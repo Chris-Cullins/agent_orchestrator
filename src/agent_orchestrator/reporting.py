@@ -92,5 +92,6 @@ class RunReportReader:
             metrics=dict(payload.get("metrics", {})),
             logs=list(payload.get("logs", [])),
             next_suggested_steps=list(payload.get("next_suggested_steps", [])),
+            gate_failure=bool(payload.get("gate_failure", False)),
             raw=payload,
         )

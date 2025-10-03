@@ -43,6 +43,7 @@ def load_workflow(path: Path) -> Workflow:
             needs=list(raw_step.get("needs", [])),
             next_on_success=list(raw_step.get("next_on_success", [])),
             gates=list(raw_step.get("gates", [])),
+            loop_back_to=raw_step.get("loop_back_to"),
             human_in_the_loop=bool(raw_step.get("human_in_the_loop", False)),
             metadata=dict(raw_step.get("metadata", {})),
         )
@@ -65,4 +66,6 @@ def _validate_edges(steps: Dict[str, Step]) -> None:
         for nxt in step.next_on_success:
             if nxt not in steps:
                 raise WorkflowLoadError(f"Step '{step.id}' references unknown next step '{nxt}'")
+        if step.loop_back_to and step.loop_back_to not in steps:
+            raise WorkflowLoadError(f"Step '{step.id}' has unknown loop_back_to target '{step.loop_back_to}'")
 

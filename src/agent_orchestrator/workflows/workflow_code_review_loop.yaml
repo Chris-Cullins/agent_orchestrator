@@ -1,0 +1,62 @@
+name: code_review_loop_workflow
+description: >
+  Workflow demonstrating loop-back functionality where code review can send
+  work back to coding for fixes until quality gates are met.
+  
+  This workflow implements an iterative development cycle:
+  1. Coding agent implements the feature
+  2. Code review agent checks for P0/P1 issues
+  3. If critical issues found (gate_failure: true), loops back to coding
+  4. Process repeats until code passes review or max iterations reached
+  5. Once code passes, proceeds to testing and documentation
+
+steps:
+  # Initial planning step
+  - id: planning
+    agent: dev_architect
+    prompt: src/agent_orchestrator/prompts/01_planning.md
+    needs: []
+    next_on_success: [coding]
+
+  # Coding step - implements features
+  # This step can be invoked multiple times via loop-back
+  - id: coding
+    agent: coding
+    prompt: src/agent_orchestrator/prompts/02_coding.md
+    needs: [planning]
+    next_on_success: [code_review]
+
+  # Code review step with loop-back capability
+  # If P0/P1 issues found, sets gate_failure: true and loops back to coding
+  # The loop-back mechanism provides iteration protection (default: 4 iterations)
+  - id: code_review
+    agent: code_review
+    prompt: src/agent_orchestrator/prompts/06_code_review.md
+    needs: [coding]
+    loop_back_to: coding  # Send back to coding if gate fails
+    next_on_success: [testing]
+
+  # Testing step - only runs when code passes review
+  - id: testing
+    agent: manual_testing
+    prompt: src/agent_orchestrator/prompts/04_manual.md
+    needs: [code_review]
+    next_on_success: [docs]
+
+  # Documentation step
+  - id: docs
+    agent: docs_updater
+    prompt: src/agent_orchestrator/prompts/05_docs.md
+    needs: [testing]
+    next_on_success: []
+
+# Usage example:
+# agent-orchestrator run \
+#   --repo /path/to/repo \
+#   --workflow src/agent_orchestrator/workflows/workflow_code_review_loop.yaml \
+#   --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
+#   --max-iterations 3 \
+#   --max-attempts 2
+#
+# The --max-iterations parameter controls how many times the loop-back can occur
+# before the step is marked as failed (default: 4)
