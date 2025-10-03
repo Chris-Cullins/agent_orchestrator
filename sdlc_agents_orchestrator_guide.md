@@ -57,6 +57,7 @@ You should see steps run in order and `*.json` appear in `demo_repo/.agents/run_
 - Required fields: `schema, run_id, step_id, agent, status, started_at, ended_at`  
 - `status`: `"COMPLETED"` or `"FAILED"`
 - `started_at` / `ended_at` must be timezone-aware ISO 8601 UTC strings—call `src/agent_orchestrator/time_utils.utc_now()` to stay compatible with Python 3.13+
+- Optional loop-back flag: set `"gate_failure": true` to trigger `loop_back_to` targets when a quality gate fails; leave it false or omit it to continue downstream steps.
 
 **Optional log marker (for CI logs/humans):**
 ```
@@ -71,6 +72,10 @@ RUN_REPORT_JSON>>>
 - `RUN_ID`, `STEP_ID`, `REPO_DIR`, `REPORT_PATH`
 
 **Idempotency:** agents should be safe to re‑run; dedupe with `run_id + step_id`.
+
+### Repository-Level Prompt Overrides
+
+Override any built-in prompt by dropping a file with the same name under `.agents/prompts/` inside the target repository. The orchestrator now resolves prompts by checking repository-specific overrides first and falls back to `src/agent_orchestrator/prompts/` only when no override exists. This lets teams customize tone, guardrails, and acceptance criteria without forking the orchestrator or editing workflow YAML.
 
 ---
 
@@ -154,11 +159,12 @@ REPORTS_DIR = ".agents/run_reports"
 ### Data classes
 ```python
 class Step:          # static config from YAML
-  id, agent, prompt, needs, next_on_success, gates, human_in_the_loop
+  id, agent, prompt, needs, loop_back_to, next_on_success, gates, human_in_the_loop
 
 class StepRuntime:   # dynamic state while running
   status="PENDING" | RUNNING | COMPLETED | FAILED | SKIPPED
   attempts: int
+  iteration_count: int
   report_path: Optional[str]
 ```
 
@@ -252,6 +258,7 @@ Useful flags:
 - `--codex-bin` / `CODEX_EXEC_BIN` to pick the binary.
 - `--timeout` to cap runtime.
 - `--working-dir` to override the cwd (defaults to the repo).
+- `--max-iterations` to cap loop-back cycles before the orchestrator marks a step failed.
 - Repeat `--wrapper-arg` to pass additional arguments through to `codex exec`.
 
 The wrapper passes `RUN_ID`, `STEP_ID`, `REPO_DIR`, and `REPORT_PATH` env vars to the subprocess
@@ -263,7 +270,7 @@ a report so the rest of the workflow can continue.
 ## Reliability & Scale
 
 - **Idempotency**: name work dirs/branches with `run_id__step_id`; skip if report exists & completed.
-- **Retries**: exponential backoff + cap attempts; surface reasons on failure.
+- **Retries & iteration caps**: exponential backoff + cap attempts; track `iteration_count` per step and enforce `--max-iterations` to avoid infinite loop-back cycles.
 - **Run report ingestion**: transient JSON parse failures are retried automatically and ultimately reported as `RunReportError` with the source path for quick triage.
 - **Concurrency**: per‑repo limits; global WIP; fair scheduling.
 - **Timeouts**: hard caps per step; collect partial logs on cancel.

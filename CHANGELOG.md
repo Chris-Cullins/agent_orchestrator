@@ -55,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enhanced run report prompt block to demand concrete data and reject instructional text
   - Added shared run report normalisation/validation and wrapper guardrails for Codex/Claude flows
   - Tightened backlog_miner prompts and regression tests to cover placeholder rejection
+- Ensure `08_architect_repo_review.md` ends with the canonical run-report completion block so backlog architect runs emit concrete reports
+  - Appended the standard run-report instructions to `src/agent_orchestrator/prompts/08_architect_repo_review.md`
+  - Added regression coverage in `tests/test_prompts_architect_repo_review.py`
 
 ### Migration Guide
 If you have existing scripts or commands using the old wrapper references:

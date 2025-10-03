@@ -418,7 +418,23 @@ class Orchestrator:
         # Increment iteration count for the step that triggered the loop-back
         from_runtime = self._state.steps[from_step]
         from_runtime.iteration_count += 1
-        from_runtime.status = StepStatus.COMPLETED  # Mark as completed to avoid retry
+
+
+        # Requeue the source step so it runs again after upstream steps rerun.
+        from_runtime.status = StepStatus.PENDING
+        from_runtime.report_path = None
+        from_runtime.started_at = None
+        from_runtime.ended_at = None
+        from_runtime.last_error = None
+        from_runtime.manual_input_path = None
+        from_runtime.logs = []
+        from_runtime.metrics = {}
+        from_runtime.artifacts = []
+        self._log.info(
+            "Requeued loop-back source step=%s iteration=%s",
+            from_step,
+            from_runtime.iteration_count,
+        )
 
         # Find all steps between to_step and from_step (inclusive of to_step)
         # These are steps that need to be reset

@@ -541,6 +541,7 @@ tail -f /path/to/your/project/.agents/logs/*.log
 - `--log-level DEBUG` - Verbose logging for troubleshooting
 - `--max-attempts 3` - Retry failed steps up to 3 times
 - `--poll-interval 0.5` - Check for completion every 0.5 seconds
+- `--max-iterations 4` - Cap loop-back iterations before marking a step failed
 - `--schema path/to/schema.json` - Validate run reports against JSON schema
 
 ### Troubleshooting
@@ -587,6 +588,7 @@ steps:
     agent: agent_name
     prompt: path/to/prompt.md
     needs: [prerequisite_step_ids]
+    loop_back_to: optional_previous_step_id  # optional
     next_on_success: [successor_step_ids]
     gates: [optional_gate_conditions]
     human_in_the_loop: true/false
