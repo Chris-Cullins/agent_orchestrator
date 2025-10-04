@@ -4,9 +4,13 @@ import argparse
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, Optional
 
-from .gating import CompositeGateEvaluator, AlwaysOpenGateEvaluator, FileBackedGateEvaluator
+from .gating import AlwaysOpenGateEvaluator, CompositeGateEvaluator, FileBackedGateEvaluator
+from .git_worktree import (
+    GitWorktreeError,
+    GitWorktreeManager,
+    persist_worktree_outputs,
+)
 from .notifications import NotificationService
 from .notifications.email import EmailConfigError, build_email_notification_service
 from .orchestrator import Orchestrator, build_default_runner
@@ -14,18 +18,12 @@ from .reporting import RunReportReader
 from .runner import ExecutionTemplate, StepRunner
 from .state import RunStatePersister
 from .workflow import WorkflowLoadError, load_workflow
-from .git_worktree import (
-    GitWorktreeError,
-    GitWorktreeManager,
-    persist_worktree_outputs,
-)
-
 
 _LOG = logging.getLogger(__name__)
 
 
-def parse_env(env_pairs: Optional[list[str]]) -> Dict[str, str]:
-    result: Dict[str, str] = {}
+def parse_env(env_pairs: list[str] | None) -> dict[str, str]:
+    result: dict[str, str] = {}
     if not env_pairs:
         return result
     for item in env_pairs:
@@ -46,11 +44,11 @@ def _build_notification_service(repo_dir: Path) -> NotificationService:
 
 def build_runner(
     repo_dir: Path,
-    wrapper: Optional[str],
-    command_template: Optional[str],
-    logs_dir: Optional[Path],
-    workdir: Optional[Path],
-    base_env: Dict[str, str],
+    wrapper: str | None,
+    command_template: str | None,
+    logs_dir: Path | None,
+    workdir: Path | None,
+    base_env: dict[str, str],
     wrapper_args: list[str],
 ) -> StepRunner:
     logs_dir = logs_dir or (repo_dir / ".agents" / "logs")
@@ -88,9 +86,9 @@ def run_from_args(args: argparse.Namespace) -> None:
     repo_dir = Path(args.repo).expanduser().resolve()
     run_repo_dir = repo_dir
     repo_root_for_outputs = repo_dir
-    worktree_manager: Optional[GitWorktreeManager] = None
+    worktree_manager: GitWorktreeManager | None = None
     worktree_handle = None
-    run_id_override: Optional[str] = None
+    run_id_override: str | None = None
     workflow_path = Path(args.workflow).expanduser().resolve()
     workflow_root = workflow_path.parent
 
@@ -106,7 +104,7 @@ def run_from_args(args: argparse.Namespace) -> None:
         worktree_manager = GitWorktreeManager(repo_dir)
         repo_root_for_outputs = worktree_manager.repo_root
 
-        worktree_root: Optional[Path] = None
+        worktree_root: Path | None = None
         if args.git_worktree_root:
             candidate = Path(args.git_worktree_root).expanduser()
             if not candidate.is_absolute():
@@ -167,7 +165,7 @@ def run_from_args(args: argparse.Namespace) -> None:
         resolved_logs_dir = repo_root_for_outputs / ".agents" / "logs"
 
     resolved_workdir = Path(args.workdir).expanduser().resolve() if args.workdir else None
-    orchestrator: Optional[Orchestrator] = None
+    orchestrator: Orchestrator | None = None
     try:
         try:
             runner = build_runner(
@@ -307,7 +305,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[list[str]] = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 

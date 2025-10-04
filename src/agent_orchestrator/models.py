@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
 
-from .time_utils import ISO_FORMAT, utc_now
+from .time_utils import utc_now
 
 
 class StepStatus(str, Enum):
@@ -24,21 +23,21 @@ class Step:
     id: str
     agent: str
     prompt: str
-    needs: List[str] = field(default_factory=list)
-    next_on_success: List[str] = field(default_factory=list)
-    gates: List[str] = field(default_factory=list)
-    loop_back_to: Optional[str] = None
+    needs: list[str] = field(default_factory=list)
+    next_on_success: list[str] = field(default_factory=list)
+    gates: list[str] = field(default_factory=list)
+    loop_back_to: str | None = None
     human_in_the_loop: bool = False
-    metadata: Dict[str, str] = field(default_factory=dict)
+    metadata: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
 class Workflow:
     name: str
     description: str
-    steps: Dict[str, Step]
+    steps: dict[str, Step]
 
-    def entry_steps(self) -> List[str]:
+    def entry_steps(self) -> list[str]:
         return [step_id for step_id, step in self.steps.items() if not step.needs]
 
 
@@ -51,12 +50,12 @@ class RunReport:
     status: str
     started_at: str
     ended_at: str
-    artifacts: List[str] = field(default_factory=list)
-    metrics: Dict[str, str] = field(default_factory=dict)
-    logs: List[str] = field(default_factory=list)
-    next_suggested_steps: List[str] = field(default_factory=list)
+    artifacts: list[str] = field(default_factory=list)
+    metrics: dict[str, str] = field(default_factory=dict)
+    logs: list[str] = field(default_factory=list)
+    next_suggested_steps: list[str] = field(default_factory=list)
     gate_failure: bool = False
-    raw: Dict[str, object] = field(default_factory=dict)
+    raw: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
@@ -64,19 +63,19 @@ class StepRuntime:
     status: StepStatus = StepStatus.PENDING
     attempts: int = 0
     iteration_count: int = 0
-    report_path: Optional[Path] = None
-    started_at: Optional[str] = None
-    ended_at: Optional[str] = None
-    last_error: Optional[str] = None
-    artifacts: List[str] = field(default_factory=list)
-    metrics: Dict[str, object] = field(default_factory=dict)
-    logs: List[str] = field(default_factory=list)
-    manual_input_path: Optional[Path] = None
-    blocked_by_loop: Optional[str] = None
+    report_path: Path | None = None
+    started_at: str | None = None
+    ended_at: str | None = None
+    last_error: str | None = None
+    artifacts: list[str] = field(default_factory=list)
+    metrics: dict[str, object] = field(default_factory=dict)
+    logs: list[str] = field(default_factory=list)
+    manual_input_path: Path | None = None
+    blocked_by_loop: str | None = None
     notified_failure: bool = False
     notified_human_input: bool = False
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "status": self.status.value,
             "attempts": self.attempts,
@@ -103,9 +102,9 @@ class RunState:
     reports_dir: Path
     manual_inputs_dir: Path
     created_at: str = field(default_factory=utc_now)
-    steps: Dict[str, StepRuntime] = field(default_factory=dict)
+    steps: dict[str, StepRuntime] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "run_id": self.run_id,
             "workflow_name": self.workflow_name,

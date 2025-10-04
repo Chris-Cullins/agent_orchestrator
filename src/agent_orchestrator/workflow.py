@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Dict, Iterable
 
 import yaml
 
@@ -22,7 +22,7 @@ def load_workflow(path: Path) -> Workflow:
     if "steps" not in payload or not isinstance(payload["steps"], Iterable):
         raise WorkflowLoadError("Workflow file must declare a 'steps' list")
 
-    steps: Dict[str, Step] = {}
+    steps: dict[str, Step] = {}
     for step_idx, raw_step in enumerate(payload["steps"], start=1):
         if not isinstance(raw_step, dict):
             raise WorkflowLoadError(f"Workflow step #{step_idx} must be a mapping")
@@ -58,7 +58,7 @@ def load_workflow(path: Path) -> Workflow:
     )
 
 
-def _validate_edges(steps: Dict[str, Step]) -> None:
+def _validate_edges(steps: dict[str, Step]) -> None:
     for step in steps.values():
         for dep in step.needs:
             if dep not in steps:

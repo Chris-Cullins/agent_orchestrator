@@ -1,5 +1,7 @@
 # SDLC Agents Orchestrator
 
+[![CI](https://github.com/Chris-Cullins/agent_orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/Chris-Cullins/agent_orchestrator/actions/workflows/ci.yml)
+
 A production-ready, file-driven orchestrator for chaining SDLC agents via run report files. This system automates software development workflows by orchestrating AI agents that handle planning, coding, testing, review, documentation, and deployment tasks.
 
 ## How to Use This Application on Your Code Repository
@@ -366,7 +368,7 @@ Per-run folders under `.agents/runs/<run_id>/` are created for every workflow la
 Key takeaways:
 - Review `reports/` for per-step summaries and `logs/` for raw stdout/stderr before debugging a failure.
 - GitHub issue workflows now publish their Markdown handoff to `artifacts/gh_issue_<ISSUE_NUMBER>.md` and export `ISSUE_MARKDOWN_PATH`, `ISSUE_MARKDOWN_DIR`, and `ISSUE_MARKDOWN_FILENAME` so downstream steps and prompts can link to it reliably.
-- Use `run_state.json` together with `--start-at-step` to resume a workflow without re-running completed steps.
+- Use `run_state.json` together with `--start-at-step` to resume a workflow without re-running completed steps. For detailed information about the state file schema, field semantics, and operational workflows, see [docs/state_file_schema.md](docs/state_file_schema.md).
 - Prefer deleting the entire `.agents/runs/<run_id>/` folder (or starting a new `--run-id`) to reset state instead of editing `run_state.json` in place.
 
 ### Step 6: Customizing Agent Behavior with Prompt Overrides
@@ -720,6 +722,8 @@ steps:
     - `run_workflow.sh` — Convenience script for running workflows
 - `src/agent_orchestrator/workflows/workflow.yaml` — Complete SDLC pipeline definition
 - `src/agent_orchestrator/workflows/workflow_backlog_miner.yaml` — Architecture and tech debt analysis workflow
+- `docs/` — Documentation
+  - `state_file_schema.md` — Comprehensive schema documentation for run_state.json
 - `requirements.txt` — Python dependencies
 - `README.md` — This comprehensive guide
 
@@ -752,4 +756,7 @@ python -m agent_orchestrator.cli run \
   --env FEATURE_DESCRIPTION="Add OAuth2 user authentication"
 ```
 
-For detailed architecture documentation and contracts, see `sdlc_agents_orchestrator_guide.md`.
+## Additional Documentation
+
+- **sdlc_agents_orchestrator_guide.md** — Detailed architecture documentation and contracts
+- **docs/state_file_schema.md** — Comprehensive schema documentation for the persisted state file (`run_state.json`), including field semantics, operational workflows, and troubleshooting guidance

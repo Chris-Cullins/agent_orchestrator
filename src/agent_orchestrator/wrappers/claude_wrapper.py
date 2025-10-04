@@ -11,9 +11,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
-from agent_orchestrator.time_utils import utc_now
 from agent_orchestrator.run_report_format import (
     RUN_REPORT_END,
     RUN_REPORT_START,
@@ -21,9 +20,10 @@ from agent_orchestrator.run_report_format import (
     build_run_report_instructions,
     normalize_run_report_payload,
 )
+from agent_orchestrator.time_utils import utc_now
 
 
-def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, list[str]]:
+def parse_args(argv: Optional[list[str]] = None) -> tuple[argparse.Namespace, list[str]]:
     parser = argparse.ArgumentParser(
         description="Wrapper that adapts orchestrator interface to Claude CLI."
     )
@@ -64,18 +64,18 @@ def build_claude_command(
     started_at: str,
 ) -> tuple[list[str], str]:
     """Build the claude command and create the prompt content."""
-    
+
     # Read the prompt file
     prompt_path = Path(args.prompt)
     if not prompt_path.exists():
         raise FileNotFoundError(f"Prompt file not found: {args.prompt}")
 
-    with open(prompt_path, 'r', encoding='utf-8') as f:
+    with open(prompt_path, encoding='utf-8') as f:
         prompt_content = f.read()
 
     # Replace {run_id} placeholder with actual run_id
     prompt_content = prompt_content.replace("{run_id}", args.run_id)
-    
+
     # Enhance the prompt with context about the task
     enhanced_prompt = f"""You are an AI agent named "{args.agent}" working on a software development task.
 
@@ -90,7 +90,7 @@ Your task instructions:
 
 Please proceed with the task and ensure you include the run report at the end.
 """
-    
+
     # Build the command - Claude uses -p for print mode (non-interactive)
     command = [
         args.claude_bin,
@@ -99,15 +99,15 @@ Please proceed with the task and ensure you include the run report at the end.
         "--dangerously-skip-permissions",  # Skip permission checks for automation
         "--add-dir", args.repo,  # Allow access to repository directory
     ]
-    
+
     # Add any forwarded arguments
     if forwarded:
         command.extend(forwarded)
-    
+
     return command, enhanced_prompt
 
 
-def extract_run_report(text: str) -> Optional[Dict[str, Any]]:
+def extract_run_report(text: str) -> Optional[dict[str, Any]]:
     """Extract run report from Claude output."""
     start = text.rfind(RUN_REPORT_START)
     end = text.rfind(RUN_REPORT_END)
@@ -131,7 +131,7 @@ def synthesize_report(
     logs: list[str],
     duration_ms: int,
     artifacts: Optional[list[str]] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a synthetic run report when Claude doesn't provide one."""
     return {
         "schema": "run_report@v0",
@@ -226,7 +226,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             combined_logs.extend(line for line in result.stdout.splitlines() if line.strip())
         if result.stderr:
             combined_logs.extend(line for line in result.stderr.splitlines() if line.strip())
-        
+
         # Try to detect artifacts by looking for created files
         artifacts = []
         repo_path = Path(args.repo)
@@ -236,7 +236,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 for file_path in repo_path.glob(pattern):
                     if file_path.is_file():
                         artifacts.append(str(file_path.relative_to(repo_path)))
-        
+
         report_payload = synthesize_report(
             run_id=args.run_id,
             step_id=args.step_id,
@@ -293,12 +293,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     return result.returncode
 
 
-def _emit_report(report: Dict[str, Any], path: Path) -> None:
+def _emit_report(report: dict[str, Any], path: Path) -> None:
     """Emit the run report to both stdout and file."""
     print(f"\\n{RUN_REPORT_START}")
     print(json.dumps(report, indent=2))
     print(RUN_REPORT_END)
-    
+
     with path.open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
 

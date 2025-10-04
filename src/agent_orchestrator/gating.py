@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict
 
 from .models import Step
 
@@ -29,7 +28,7 @@ class FileBackedGateEvaluator(GateEvaluator):
         states = self._load_states()
         return states.get(gate, False)
 
-    def _load_states(self) -> Dict[str, bool]:
+    def _load_states(self) -> dict[str, bool]:
         if not self._path.exists():
             return {}
         with self._path.open("r", encoding="utf-8") as f:

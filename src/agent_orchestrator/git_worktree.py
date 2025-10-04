@@ -7,7 +7,6 @@ import subprocess
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 __all__ = [
     "GitWorktreeError",
@@ -54,9 +53,9 @@ class GitWorktreeManager:
 
     def create(
         self,
-        root: Optional[Path] = None,
-        ref: Optional[str] = None,
-        branch: Optional[str] = None,
+        root: Path | None = None,
+        ref: str | None = None,
+        branch: str | None = None,
     ) -> GitWorktreeHandle:
         repo_root = self._repo_dir
         worktree_root = self._resolve_root_directory(root)
@@ -71,8 +70,10 @@ class GitWorktreeManager:
         # Validate path is within allowed boundaries
         try:
             worktree_path.relative_to(repo_root.parent)
-        except ValueError:
-            raise GitWorktreeError(f"Worktree path outside repository parent: {worktree_path}")
+        except ValueError as e:
+            raise GitWorktreeError(
+                f"Worktree path outside repository parent: {worktree_path}"
+            ) from e
 
         base_ref = ref or "HEAD"
         # Let git handle existence checks atomically to avoid race conditions
@@ -128,7 +129,7 @@ class GitWorktreeManager:
         )
         return result.returncode == 0
 
-    def _resolve_root_directory(self, root: Optional[Path]) -> Path:
+    def _resolve_root_directory(self, root: Path | None) -> Path:
         if root is None:
             return (self._repo_dir / ".agents" / "worktrees").resolve()
         candidate = root.expanduser()

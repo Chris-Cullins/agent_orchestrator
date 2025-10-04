@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from textwrap import dedent
-from typing import Any, Iterable, List
+from typing import Any
 
 RUN_REPORT_START = "<<<RUN_REPORT_JSON"
 RUN_REPORT_END = "RUN_REPORT_JSON>>>"
@@ -158,7 +159,7 @@ def _matches_placeholder(values: Iterable[str], phrases: Iterable[str]) -> bool:
     return False
 
 
-def _normalise_string_list(value: Any) -> List[str]:
+def _normalise_string_list(value: Any) -> list[str]:
     """Return *value* coerced into a list of non-empty strings."""
 
     if value is None:
@@ -169,7 +170,7 @@ def _normalise_string_list(value: Any) -> List[str]:
     else:
         items = [value]
 
-    cleaned: List[str] = []
+    cleaned: list[str] = []
     for item in items:
         text = str(item).strip()
         if text:

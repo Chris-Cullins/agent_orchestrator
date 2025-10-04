@@ -343,6 +343,8 @@ agent_orchestrator/
 │   └── wrappers/
 │       ├── claude_wrapper.py
 │       └── codex_wrapper.py
+├── docs/
+│   └── state_file_schema.md
 ├── tests/
 ├── AGENTS.md
 ├── config/
@@ -359,7 +361,7 @@ target-repo/
         ├── logs/
         ├── artifacts/
         ├── manual_inputs/  # created when --pause-for-human-input is enabled
-        └── run_state.json
+        └── run_state.json  # see docs/state_file_schema.md for detailed schema
 ```
 
 ---

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 from ..models import StepStatus
 
@@ -26,10 +25,10 @@ class StepNotification:
     attempt: int
     status: StepStatus
     trigger: str
-    manual_input_path: Optional[Path]
-    report_path: Optional[Path]
-    logs: List[str]
-    last_error: Optional[str]
+    manual_input_path: Path | None
+    report_path: Path | None
+    logs: list[str]
+    last_error: str | None
 
 
 class NotificationService:

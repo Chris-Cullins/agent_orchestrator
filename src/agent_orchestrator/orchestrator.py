@@ -5,9 +5,8 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, Optional
 
-from .gating import GateEvaluator, AlwaysOpenGateEvaluator, CompositeGateEvaluator
+from .gating import AlwaysOpenGateEvaluator, CompositeGateEvaluator, GateEvaluator
 from .models import RunState, Step, StepRuntime, StepStatus, Workflow, utc_now
 from .notifications import (
     NotificationService,
@@ -29,15 +28,15 @@ class Orchestrator:
         report_reader: RunReportReader,
         state_persister: RunStatePersister,
         runner: StepRunner,
-        gate_evaluator: Optional[GateEvaluator] = None,
+        gate_evaluator: GateEvaluator | None = None,
         poll_interval: float = 1.0,
         max_attempts: int = 2,
         max_iterations: int = 4,
         pause_for_human_input: bool = False,
-        logger: Optional[logging.Logger] = None,
-        run_id: Optional[str] = None,
-        start_at_step: Optional[str] = None,
-        notification_service: Optional[NotificationService] = None,
+        logger: logging.Logger | None = None,
+        run_id: str | None = None,
+        start_at_step: str | None = None,
+        notification_service: NotificationService | None = None,
     ) -> None:
         self._workflow = workflow
         self._workflow_root = workflow_root
@@ -102,7 +101,7 @@ class Orchestrator:
                 steps={step_id: StepRuntime() for step_id in workflow.steps},
             )
 
-        self._active_processes: Dict[str, StepLaunch] = {}
+        self._active_processes: dict[str, StepLaunch] = {}
 
     @property
     def run_id(self) -> str:
@@ -342,10 +341,10 @@ class Orchestrator:
                 return False
         return True
 
-    def _collect_dependency_artifacts(self, step: Step) -> Dict[str, str]:
+    def _collect_dependency_artifacts(self, step: Step) -> dict[str, str]:
         """Collect artifacts from dependency steps and return as environment variables."""
-        env: Dict[str, str] = {}
-        issue_artifact: Optional[Path] = None
+        env: dict[str, str] = {}
+        issue_artifact: Path | None = None
         for dep_id in step.needs:
             dep_runtime = self._state.steps.get(dep_id)
             if not dep_runtime or not dep_runtime.artifacts:
@@ -606,10 +605,10 @@ class Orchestrator:
 def build_default_runner(
     repo_dir: Path,
     wrapper: Path,
-    default_env: Optional[dict[str, str]] = None,
-    default_args: Optional[list[str]] = None,
-    logs_dir: Optional[Path] = None,
-    workdir: Optional[Path] = None,
+    default_env: dict[str, str] | None = None,
+    default_args: list[str] | None = None,
+    logs_dir: Path | None = None,
+    workdir: Path | None = None,
 ) -> StepRunner:
     template = ExecutionTemplate(
         "{python} {wrapper} --run-id {run_id} --step-id {step_id} --agent {agent} "

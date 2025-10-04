@@ -1,6 +1,6 @@
 import logging
 
-from agent_orchestrator.models import Step, Workflow, StepStatus
+from agent_orchestrator.models import Step, StepStatus, Workflow
 from agent_orchestrator.orchestrator import Orchestrator
 from agent_orchestrator.reporting import RunReportReader
 from agent_orchestrator.runner import ExecutionTemplate, StepRunner

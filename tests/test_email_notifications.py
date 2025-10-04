@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 from unittest.mock import Mock
 
 import pytest
@@ -43,10 +42,10 @@ def test_load_config_invalid_recipients_raises(tmp_path: Path) -> None:
 
 
 class DummyTransport:
-    def __init__(self, store: List[str | object]) -> None:
+    def __init__(self, store: list[str | object]) -> None:
         self.store = store
 
-    def __enter__(self) -> "DummyTransport":
+    def __enter__(self) -> DummyTransport:
         return self
 
     def send_message(self, message) -> None:  # type: ignore[override]
@@ -66,7 +65,7 @@ def test_email_service_sends_failure_notification(tmp_path: Path) -> None:
         smtp=smtp,
         subject_prefix="[Test]",
     )
-    sent: List[object] = []
+    sent: list[object] = []
     service = EmailNotificationService(
         config,
         transport_factory=lambda settings: DummyTransport(sent),

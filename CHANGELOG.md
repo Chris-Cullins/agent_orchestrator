@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- CI/CD pipeline with GitHub Actions (Issue #9)
+  - Added `.github/workflows/ci.yml` with three parallel jobs: lint, typecheck, and test
+  - Added development dependencies in `pyproject.toml` for ruff, mypy, pytest, and pytest-cov
+  - Configured ruff for linting with sensible defaults (line length 100, Python 3.9+)
+  - Configured mypy for type checking with lenient settings to start
+  - Configured pytest with coverage reporting (HTML and terminal)
+  - Added CI status badge to README.md
+  - All pull requests and pushes to main now run automated quality checks
 - Documentation for persisted state file schema (Issue #32)
   - Added `docs/state_file_schema.md` providing comprehensive documentation of the `run_state.json` schema
   - Documents all fields in `RunState` and `StepRuntime` data models with types, descriptions, and semantics

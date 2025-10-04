@@ -5,15 +5,14 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Dict, List
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
-from agent_orchestrator.models import Step, Workflow, StepStatus, RunReport
+from agent_orchestrator.models import Step, StepStatus, Workflow
 from agent_orchestrator.orchestrator import Orchestrator
 from agent_orchestrator.reporting import RunReportReader
-from agent_orchestrator.runner import StepRunner, ExecutionTemplate
+from agent_orchestrator.runner import ExecutionTemplate, StepRunner
 from agent_orchestrator.state import RunStatePersister
 
 
@@ -107,10 +106,10 @@ def write_report(
 def test_loopback_on_gate_failure(temp_repo: Path, report_reader: RunReportReader, state_persister: RunStatePersister):
     """Test that gate failure triggers loop-back."""
     workflow = create_workflow_with_loopback()
-    
+
     # Mock the runner to track launches
-    launches: List[str] = []
-    
+    launches: list[str] = []
+
     def mock_launch(step, **kwargs):
         launches.append(step.id)
         launch = Mock()
@@ -118,7 +117,7 @@ def test_loopback_on_gate_failure(temp_repo: Path, report_reader: RunReportReade
         launch.process.poll = Mock(return_value=None)  # Process running
         launch.report_path = kwargs["report_path"]
         launch.close_log = Mock()
-        
+
         # Write report after a short delay to simulate agent work
         def write_delayed_report():
             time.sleep(0.1)
@@ -132,14 +131,14 @@ def test_loopback_on_gate_failure(temp_repo: Path, report_reader: RunReportReade
                 gate_failure=gate_failure,
             )
             launch.process.poll = Mock(return_value=0)  # Process finished
-        
+
         import threading
         threading.Thread(target=write_delayed_report, daemon=True).start()
         return launch
-    
+
     mock_runner = Mock(spec=StepRunner)
     mock_runner.launch = Mock(side_effect=mock_launch)
-    
+
     orchestrator = Orchestrator(
         workflow=workflow,
         workflow_root=temp_repo,
@@ -152,13 +151,13 @@ def test_loopback_on_gate_failure(temp_repo: Path, report_reader: RunReportReade
         max_iterations=3,
         logger=logging.getLogger(__name__),
     )
-    
+
     # Run in a separate thread with timeout
     import threading
     run_thread = threading.Thread(target=orchestrator.run, daemon=True)
     run_thread.start()
     run_thread.join(timeout=5.0)
-    
+
     # Verify loop-back occurred
     assert "step_a" in launches
     assert "step_b" in launches
@@ -196,7 +195,7 @@ def test_loopback_blocks_when_not_a_direct_dependency(
         },
     )
 
-    launches: List[str] = []
+    launches: list[str] = []
 
     def mock_launch(step, **kwargs):
         launches.append(step.id)
@@ -258,10 +257,10 @@ def test_loopback_blocks_when_not_a_direct_dependency(
 def test_max_iterations_enforced(temp_repo: Path, report_reader: RunReportReader, state_persister: RunStatePersister):
     """Test that max iterations limit is enforced."""
     workflow = create_workflow_with_loopback()
-    
+
     max_iterations = 2
-    launches: List[str] = []
-    
+    launches: list[str] = []
+
     def mock_launch(step, **kwargs):
         launches.append(step.id)
         launch = Mock()
@@ -269,7 +268,7 @@ def test_max_iterations_enforced(temp_repo: Path, report_reader: RunReportReader
         launch.process.poll = Mock(return_value=None)
         launch.report_path = kwargs["report_path"]
         launch.close_log = Mock()
-        
+
         def write_delayed_report():
             time.sleep(0.05)
             # Always fail gate for step_b to trigger loop-back
@@ -283,14 +282,14 @@ def test_max_iterations_enforced(temp_repo: Path, report_reader: RunReportReader
                 gate_failure=gate_failure,
             )
             launch.process.poll = Mock(return_value=0)
-        
+
         import threading
         threading.Thread(target=write_delayed_report, daemon=True).start()
         return launch
-    
+
     mock_runner = Mock(spec=StepRunner)
     mock_runner.launch = Mock(side_effect=mock_launch)
-    
+
     orchestrator = Orchestrator(
         workflow=workflow,
         workflow_root=temp_repo,
@@ -303,13 +302,13 @@ def test_max_iterations_enforced(temp_repo: Path, report_reader: RunReportReader
         max_iterations=max_iterations,
         logger=logging.getLogger(__name__),
     )
-    
+
     # Run with timeout
     import threading
     run_thread = threading.Thread(target=orchestrator.run, daemon=True)
     run_thread.start()
     run_thread.join(timeout=3.0)
-    
+
     # Verify iteration limit was hit
     step_b_runtime = orchestrator._state.steps["step_b"]
     assert step_b_runtime.status == StepStatus.FAILED
@@ -321,9 +320,9 @@ def test_max_iterations_enforced(temp_repo: Path, report_reader: RunReportReader
 def test_iteration_count_increments(temp_repo: Path, report_reader: RunReportReader, state_persister: RunStatePersister):
     """Test that iteration_count increments correctly during loop-back."""
     workflow = create_workflow_with_loopback()
-    
-    launches: List[str] = []
-    
+
+    launches: list[str] = []
+
     def mock_launch(step, **kwargs):
         launches.append(step.id)
         launch = Mock()
@@ -331,7 +330,7 @@ def test_iteration_count_increments(temp_repo: Path, report_reader: RunReportRea
         launch.process.poll = Mock(return_value=None)
         launch.report_path = kwargs["report_path"]
         launch.close_log = Mock()
-        
+
         def write_delayed_report():
             time.sleep(0.05)
             # Fail gate only on first step_b run
@@ -345,14 +344,14 @@ def test_iteration_count_increments(temp_repo: Path, report_reader: RunReportRea
                 gate_failure=gate_failure,
             )
             launch.process.poll = Mock(return_value=0)
-        
+
         import threading
         threading.Thread(target=write_delayed_report, daemon=True).start()
         return launch
-    
+
     mock_runner = Mock(spec=StepRunner)
     mock_runner.launch = Mock(side_effect=mock_launch)
-    
+
     orchestrator = Orchestrator(
         workflow=workflow,
         workflow_root=temp_repo,
@@ -365,13 +364,13 @@ def test_iteration_count_increments(temp_repo: Path, report_reader: RunReportRea
         max_iterations=4,
         logger=logging.getLogger(__name__),
     )
-    
+
     # Run with timeout
     import threading
     run_thread = threading.Thread(target=orchestrator.run, daemon=True)
     run_thread.start()
     run_thread.join(timeout=3.0)
-    
+
     # Verify iteration count
     step_b_runtime = orchestrator._state.steps["step_b"]
     assert step_b_runtime.iteration_count >= 1, "iteration_count should increment after loop-back"
@@ -380,9 +379,9 @@ def test_iteration_count_increments(temp_repo: Path, report_reader: RunReportRea
 def test_loopback_without_gate_failure(temp_repo: Path, report_reader: RunReportReader, state_persister: RunStatePersister):
     """Test that workflow completes normally without gate failure."""
     workflow = create_workflow_with_loopback()
-    
-    launches: List[str] = []
-    
+
+    launches: list[str] = []
+
     def mock_launch(step, **kwargs):
         launches.append(step.id)
         launch = Mock()
@@ -390,7 +389,7 @@ def test_loopback_without_gate_failure(temp_repo: Path, report_reader: RunReport
         launch.process.poll = Mock(return_value=None)
         launch.report_path = kwargs["report_path"]
         launch.close_log = Mock()
-        
+
         def write_delayed_report():
             time.sleep(0.05)
             # Never trigger gate failure
@@ -403,14 +402,14 @@ def test_loopback_without_gate_failure(temp_repo: Path, report_reader: RunReport
                 gate_failure=False,
             )
             launch.process.poll = Mock(return_value=0)
-        
+
         import threading
         threading.Thread(target=write_delayed_report, daemon=True).start()
         return launch
-    
+
     mock_runner = Mock(spec=StepRunner)
     mock_runner.launch = Mock(side_effect=mock_launch)
-    
+
     orchestrator = Orchestrator(
         workflow=workflow,
         workflow_root=temp_repo,
@@ -423,17 +422,17 @@ def test_loopback_without_gate_failure(temp_repo: Path, report_reader: RunReport
         max_iterations=4,
         logger=logging.getLogger(__name__),
     )
-    
+
     # Run with timeout
     import threading
     run_thread = threading.Thread(target=orchestrator.run, daemon=True)
     run_thread.start()
     run_thread.join(timeout=2.0)
-    
+
     # Verify workflow completed successfully
     assert launches.count("step_a") == 1, "step_a should run only once"
     assert launches.count("step_b") == 1, "step_b should run only once"
-    
+
     step_a_runtime = orchestrator._state.steps["step_a"]
     step_b_runtime = orchestrator._state.steps["step_b"]
     assert step_a_runtime.status == StepStatus.COMPLETED
@@ -444,7 +443,7 @@ def test_loopback_without_gate_failure(temp_repo: Path, report_reader: RunReport
 def test_report_reader_parses_gate_failure():
     """Test that RunReportReader correctly parses gate_failure field."""
     reader = RunReportReader()
-    
+
     report_data = {
         "schema": "run_report_v1",
         "run_id": "test-123",
@@ -455,12 +454,12 @@ def test_report_reader_parses_gate_failure():
         "ended_at": "2025-01-01T00:01:00Z",
         "gate_failure": True,
     }
-    
+
     temp_path = Path("/tmp/test_report.json")
     temp_path.parent.mkdir(parents=True, exist_ok=True)
     with temp_path.open("w") as f:
         json.dump(report_data, f)
-    
+
     try:
         report = reader.read(temp_path)
         assert report.gate_failure is True
@@ -471,7 +470,7 @@ def test_report_reader_parses_gate_failure():
 def test_report_reader_gate_failure_defaults_to_false():
     """Test that gate_failure defaults to False when not present."""
     reader = RunReportReader()
-    
+
     report_data = {
         "schema": "run_report_v1",
         "run_id": "test-123",
@@ -481,12 +480,12 @@ def test_report_reader_gate_failure_defaults_to_false():
         "started_at": "2025-01-01T00:00:00Z",
         "ended_at": "2025-01-01T00:01:00Z",
     }
-    
+
     temp_path = Path("/tmp/test_report_no_gate.json")
     temp_path.parent.mkdir(parents=True, exist_ok=True)
     with temp_path.open("w") as f:
         json.dump(report_data, f)
-    
+
     try:
         report = reader.read(temp_path)
         assert report.gate_failure is False

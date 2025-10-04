@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Optional
 
 from .models import RunReport
 
@@ -20,7 +19,7 @@ class RunReportError(Exception):
 class RunReportReader:
     def __init__(
         self,
-        schema_path: Optional[Path] = None,
+        schema_path: Path | None = None,
         *,
         retry_attempts: int = 3,
         retry_delay: float = 0.2,
@@ -41,7 +40,7 @@ class RunReportReader:
         if not path.exists():
             raise RunReportError(f"Run report not found: {path}")
         payload = None
-        last_error: Optional[json.JSONDecodeError] = None
+        last_error: json.JSONDecodeError | None = None
         for attempt in range(1, self._retry_attempts + 1):
             try:
                 with path.open("r", encoding="utf-8") as f:

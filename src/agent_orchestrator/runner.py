@@ -3,9 +3,10 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, IO, List, Optional, Sequence
+from typing import IO
 
 from .models import Step
 
@@ -16,7 +17,7 @@ class ExecutionTemplate:
     def __init__(self, template: str):
         self.template = template
 
-    def build(self, context: Dict[str, object]) -> List[str]:
+    def build(self, context: dict[str, object]) -> list[str]:
         rendered = self.template.format(**{k: str(v) for k, v in context.items()})
         return shlex.split(rendered)
 
@@ -41,10 +42,10 @@ class StepRunner:
         execution_template: ExecutionTemplate,
         repo_dir: Path,
         logs_dir: Path,
-        workdir: Optional[Path] = None,
-        template_context: Optional[Dict[str, object]] = None,
-        default_env: Optional[Dict[str, str]] = None,
-        default_args: Optional[Sequence[str]] = None,
+        workdir: Path | None = None,
+        template_context: dict[str, object] | None = None,
+        default_env: dict[str, str] | None = None,
+        default_args: Sequence[str] | None = None,
     ) -> None:
         self._template = execution_template
         self._repo_dir = repo_dir
@@ -61,11 +62,11 @@ class StepRunner:
         run_id: str,
         report_path: Path,
         prompt_path: Path,
-        manual_input_path: Optional[Path] = None,
-        extra_env: Optional[Dict[str, str]] = None,
+        manual_input_path: Path | None = None,
+        extra_env: dict[str, str] | None = None,
         attempt: int = 1,
-        artifacts_dir: Optional[Path] = None,
-        logs_dir: Optional[Path] = None,
+        artifacts_dir: Path | None = None,
+        logs_dir: Path | None = None,
     ) -> StepLaunch:
         context = {
             **self._base_context,

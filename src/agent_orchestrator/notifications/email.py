@@ -3,15 +3,15 @@ from __future__ import annotations
 import contextlib
 import logging
 import smtplib
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional
+from typing import Callable
 
 import yaml
 
 from . import NotificationService, RunContext, StepNotification
-
 
 DEFAULT_CONFIG_RELATIVE_PATH = Path("config/email_notifications.yaml")
 
@@ -24,18 +24,18 @@ class EmailConfigError(ValueError):
 class SMTPSettings:
     host: str
     port: int
-    username: Optional[str] = None
-    password: Optional[str] = None
+    username: str | None = None
+    password: str | None = None
     use_tls: bool = True
-    timeout: Optional[float] = 30.0
+    timeout: float | None = 30.0
 
 
 @dataclass
 class EmailNotificationConfig:
     enabled: bool = False
-    sender: Optional[str] = None
-    recipients: List[str] = field(default_factory=list)
-    smtp: Optional[SMTPSettings] = None
+    sender: str | None = None
+    recipients: list[str] = field(default_factory=list)
+    smtp: SMTPSettings | None = None
     subject_prefix: str = "[Agent Orchestrator]"
 
     def require_transport(self) -> None:
@@ -93,7 +93,7 @@ def _parse_smtp_settings(data: dict) -> SMTPSettings:
 def load_email_notification_config(
     repo_dir: Path,
     *,
-    config_path: Optional[Path] = None,
+    config_path: Path | None = None,
 ) -> EmailNotificationConfig:
     """Load the email notification configuration from disk.
 
@@ -112,7 +112,7 @@ def load_email_notification_config(
         raise EmailConfigError("'sender' must be a string")
 
     recipients_field = config_data.get("recipients")
-    recipients: List[str] = []
+    recipients: list[str] = []
     if recipients_field is not None:
         if not isinstance(recipients_field, Iterable) or isinstance(recipients_field, (str, bytes)):
             raise EmailConfigError("'recipients' must be a list of email addresses")
@@ -142,7 +142,7 @@ def load_email_notification_config(
 class _SMTPConnection(contextlib.AbstractContextManager):
     def __init__(self, settings: SMTPSettings) -> None:
         self._settings = settings
-        self._client: Optional[smtplib.SMTP] = None
+        self._client: smtplib.SMTP | None = None
 
     def __enter__(self) -> smtplib.SMTP:
         timeout = self._settings.timeout if self._settings.timeout and self._settings.timeout > 0 else None
@@ -175,14 +175,14 @@ class EmailNotificationService(NotificationService):
         self,
         config: EmailNotificationConfig,
         *,
-        transport_factory: Optional[Callable[[SMTPSettings], contextlib.AbstractContextManager[smtplib.SMTP]]] = None,
-        logger: Optional[logging.Logger] = None,
+        transport_factory: Callable[[SMTPSettings], contextlib.AbstractContextManager[smtplib.SMTP]] | None = None,
+        logger: logging.Logger | None = None,
     ) -> None:
         self._config = config
         self._transport_factory = transport_factory or (lambda settings: _SMTPConnection(settings))
         self._logger = logger or logging.getLogger(__name__)
         self._active = False
-        self._current_context: Optional[RunContext] = None
+        self._current_context: RunContext | None = None
 
     def start(self, context: RunContext) -> None:
         self._current_context = context
@@ -281,8 +281,8 @@ class EmailNotificationService(NotificationService):
 def build_email_notification_service(
     repo_dir: Path,
     *,
-    logger: Optional[logging.Logger] = None,
-    config_path: Optional[Path] = None,
+    logger: logging.Logger | None = None,
+    config_path: Path | None = None,
 ) -> NotificationService:
     """Construct the notification service for a repository."""
 

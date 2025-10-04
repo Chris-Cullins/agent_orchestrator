@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from .models import RunState
 
@@ -16,7 +15,7 @@ class RunStatePersister:
         with self._path.open("w", encoding="utf-8") as f:
             json.dump(state.to_dict(), f, indent=2)
 
-    def load(self) -> Optional[dict]:
+    def load(self) -> dict | None:
         if not self._path.exists():
             return None
         with self._path.open("r", encoding="utf-8") as f:

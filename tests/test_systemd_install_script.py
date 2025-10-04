@@ -5,7 +5,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / "src" / "agent_orchestrator" / "scripts" / "install_systemd_timer.sh"
 WORKFLOW_PATH = REPO_ROOT / "src" / "agent_orchestrator" / "workflows" / "workflow_backlog_miner.yaml"

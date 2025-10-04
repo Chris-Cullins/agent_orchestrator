@@ -90,7 +90,7 @@ The orchestrator writes everything under `.agents/` inside the target repo:
 - `runs/<run_id>/logs/` – stdout and stderr for each attempt (attempt number is in the filename).
 - `runs/<run_id>/artifacts/` – Files agents stored via `$ARTIFACTS_DIR` (diffs, summaries, patches, etc.).
   - GitHub issue workflows now put `gh_issue_<ISSUE_NUMBER>.md` here instead of the repo root.
-- `runs/<run_id>/run_state.json` – Workflow progress (needed for `--start-at-step`).
+- `runs/<run_id>/run_state.json` – Workflow progress (needed for `--start-at-step`). For detailed schema documentation, see [docs/state_file_schema.md](docs/state_file_schema.md).
 - `runs/<run_id>/manual_inputs/` – Created only when you use `--pause-for-human-input` so operators know where to drop approvals.
 Check the per-run `logs/` directory first if something looks off. Run `ls .agents/runs` to confirm the latest `run_id` before tailing logs.
 

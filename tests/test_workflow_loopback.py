@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agent_orchestrator.workflow import load_workflow, WorkflowLoadError
+from agent_orchestrator.workflow import WorkflowLoadError, load_workflow
 
 
 def test_workflow_with_valid_loop_back_to(tmp_path: Path):
@@ -28,13 +28,13 @@ def test_workflow_with_valid_loop_back_to(tmp_path: Path):
             },
         ],
     }
-    
+
     workflow_file = tmp_path / "workflow.yaml"
     with workflow_file.open("w") as f:
         yaml.dump(workflow_data, f)
-    
+
     workflow = load_workflow(workflow_file)
-    
+
     assert workflow.name == "test_workflow"
     assert "step_a" in workflow.steps
     assert "step_b" in workflow.steps
@@ -63,11 +63,11 @@ def test_workflow_with_invalid_loop_back_to(tmp_path: Path):
             },
         ],
     }
-    
+
     workflow_file = tmp_path / "workflow.yaml"
     with workflow_file.open("w") as f:
         yaml.dump(workflow_data, f)
-    
+
     with pytest.raises(WorkflowLoadError, match="unknown loop_back_to target"):
         load_workflow(workflow_file)
 
@@ -92,12 +92,12 @@ def test_workflow_without_loop_back_to(tmp_path: Path):
             },
         ],
     }
-    
+
     workflow_file = tmp_path / "workflow.yaml"
     with workflow_file.open("w") as f:
         yaml.dump(workflow_data, f)
-    
+
     workflow = load_workflow(workflow_file)
-    
+
     assert workflow.steps["step_a"].loop_back_to is None
     assert workflow.steps["step_b"].loop_back_to is None
