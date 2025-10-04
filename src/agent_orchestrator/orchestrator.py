@@ -588,10 +588,9 @@ class Orchestrator:
         notification = self._build_step_notification(step_id, runtime, trigger="failure")
         try:
             self._notifications.notify_failure(notification)
+            runtime.notified_failure = True
         except Exception:  # pragma: no cover - defensive logging
             self._log.exception("failed to dispatch failure notification step=%s", step_id)
-        finally:
-            runtime.notified_failure = True
 
     def _notify_human_input(self, step_id: str, runtime: StepRuntime) -> None:
         if runtime.notified_human_input or runtime.status != StepStatus.WAITING_ON_HUMAN:
@@ -599,10 +598,9 @@ class Orchestrator:
         notification = self._build_step_notification(step_id, runtime, trigger="human_input")
         try:
             self._notifications.notify_human_input(notification)
+            runtime.notified_human_input = True
         except Exception:  # pragma: no cover - defensive logging
             self._log.exception("failed to dispatch human-input notification step=%s", step_id)
-        finally:
-            runtime.notified_human_input = True
 
 
 def build_default_runner(
