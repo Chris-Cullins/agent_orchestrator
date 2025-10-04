@@ -525,6 +525,7 @@ class Orchestrator:
 
         # Requeue the source step so it runs again after upstream steps rerun.
         from_runtime.status = StepStatus.PENDING
+        from_runtime.attempts = 0  # Reset attempts for the next iteration run
         from_runtime.report_path = None
         from_runtime.started_at = None
         from_runtime.ended_at = None
