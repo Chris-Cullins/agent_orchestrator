@@ -8,7 +8,7 @@ Input:
 - The issue file contains the full issue details including title, description, labels, and metadata
 
 Task:
-1. Locate and read the `gh_issue_*.md` file from `${ARTIFACTS_DIR}`
+1. Locate and read the `gh_issue_*.md` file from `${ARTIFACTS_DIR}` (fall back to `DEP_FETCH_GITHUB_ISSUE_ARTIFACTS` or `ISSUE_MARKDOWN_PATH` when provided)
 2. Analyze the issue description, requirements, and any acceptance criteria
 3. Break down the work into concrete, actionable tasks
 4. Create a development plan with clear milestones

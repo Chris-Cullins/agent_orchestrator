@@ -19,7 +19,7 @@ Task:
 4. Resolve the relative path for the run report using `${REPO_DIR}` (e.g., `python - <<'PY'`).
 
 Deliverables:
-1. `gh_issue_${ISSUE_NUMBER}.md` saved to `${ARTIFACTS_DIR}` containing:
+1. `${ISSUE_FILE}` (defaults to `${ARTIFACTS_DIR}/gh_issue_${ISSUE_NUMBER}.md`) containing:
    - Issue number and title
    - Issue state and creation/update timestamps
    - Labels, assignees, and milestone (if any)
