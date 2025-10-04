@@ -9,6 +9,12 @@ from typing import Dict, Optional
 
 from .gating import GateEvaluator, AlwaysOpenGateEvaluator, CompositeGateEvaluator
 from .models import RunState, Step, StepRuntime, StepStatus, Workflow, utc_now
+from .notifications import (
+    NotificationService,
+    NullNotificationService,
+    RunContext,
+    StepNotification,
+)
 from .reporting import RunReportError, RunReportReader
 from .runner import ExecutionTemplate, StepLaunch, StepRunner
 from .state import RunStatePersister
@@ -31,6 +37,7 @@ class Orchestrator:
         logger: Optional[logging.Logger] = None,
         run_id: Optional[str] = None,
         start_at_step: Optional[str] = None,
+        notification_service: Optional[NotificationService] = None,
     ) -> None:
         self._workflow = workflow
         self._workflow_root = workflow_root
@@ -48,6 +55,7 @@ class Orchestrator:
         self._max_iterations = max(1, max_iterations)
         self._pause_for_human = pause_for_human_input
         self._log = logger or logging.getLogger(__name__)
+        self._notifications: NotificationService = notification_service or NullNotificationService()
 
         # Try to load existing state if resuming
         existing_state = state_persister.load() if start_at_step else None
@@ -107,6 +115,7 @@ class Orchestrator:
             self._state.run_id,
             self._repo_dir,
         )
+        self._start_notifications()
         try:
             while True:
                 progress = False
@@ -127,6 +136,7 @@ class Orchestrator:
         finally:
             self._cleanup_processes()
             self._persist_state()
+            self._stop_notifications()
 
     def _launch_ready_steps(self) -> bool:
         launched = False
@@ -153,6 +163,8 @@ class Orchestrator:
             # Collect artifacts from dependency steps
             dep_artifacts_env = self._collect_dependency_artifacts(step)
 
+            runtime.notified_failure = False
+            runtime.notified_human_input = False
             runtime.status = StepStatus.RUNNING
             runtime.attempts += 1
             runtime.started_at = utc_now()
@@ -204,6 +216,7 @@ class Orchestrator:
                     runtime.status = StepStatus.FAILED
                     runtime.ended_at = utc_now()
                     self._log.error("invalid run report step=%s error=%s", step_id, exc)
+                    self._notify_failure(step_id, runtime)
                     to_remove.append(step_id)
                     progressed = True
                     continue
@@ -236,6 +249,7 @@ class Orchestrator:
                         )
                         runtime.status = StepStatus.FAILED
                         runtime.last_error = f"Gate failure after {runtime.iteration_count} iterations - max iterations reached"
+                        self._notify_failure(step_id, runtime)
                         to_remove.append(step_id)
                         progressed = True
                         continue
@@ -243,14 +257,18 @@ class Orchestrator:
                 if report.status == "COMPLETED":
                     if runtime.manual_input_path and self._pause_for_human:
                         runtime.status = StepStatus.WAITING_ON_HUMAN
+                        runtime.notified_human_input = False
                         self._log.info("awaiting human input step=%s", step_id)
+                        self._notify_human_input(step_id, runtime)
                     else:
                         runtime.status = StepStatus.COMPLETED
+                        runtime.notified_human_input = False
                         self._log.info("step completed step=%s", step_id)
                 else:
                     runtime.status = StepStatus.FAILED
                     runtime.last_error = ", ".join(report.logs[-3:]) if report.logs else "Agent reported failure"
                     self._log.warning("step failed step=%s logs=%s", step_id, runtime.last_error)
+                    self._notify_failure(step_id, runtime)
 
                 to_remove.append(step_id)
                 progressed = True
@@ -261,6 +279,7 @@ class Orchestrator:
                     f"Agent process exited with code {launch.process.returncode} without writing a run report"
                 )
                 self._log.error("step failed without report step=%s", step_id)
+                self._notify_failure(step_id, runtime)
                 to_remove.append(step_id)
                 progressed = True
 
@@ -274,6 +293,8 @@ class Orchestrator:
                 runtime.report_path = None
                 runtime.started_at = None
                 runtime.ended_at = None
+                runtime.notified_failure = False
+                runtime.notified_human_input = False
                 self._log.info("retrying step=%s next_attempt=%s", step_id, runtime.attempts + 1)
 
         return progressed
@@ -291,6 +312,7 @@ class Orchestrator:
             if runtime.manual_input_path.exists():
                 runtime.status = StepStatus.COMPLETED
                 runtime.ended_at = runtime.ended_at or utc_now()
+                runtime.notified_human_input = False
                 progressed = True
                 self._log.info("manual input received step=%s", step_id)
         return progressed
@@ -322,7 +344,8 @@ class Orchestrator:
 
     def _collect_dependency_artifacts(self, step: Step) -> Dict[str, str]:
         """Collect artifacts from dependency steps and return as environment variables."""
-        env = {}
+        env: Dict[str, str] = {}
+        issue_artifact: Optional[Path] = None
         for dep_id in step.needs:
             dep_runtime = self._state.steps.get(dep_id)
             if not dep_runtime or not dep_runtime.artifacts:
@@ -333,18 +356,34 @@ class Orchestrator:
                 # Convert artifact path to absolute path relative to repo
                 artifact_path = Path(artifact)
                 if not artifact_path.is_absolute():
-                    artifact_path = self._repo_dir / artifact_path
+                    artifact_path = (self._repo_dir / artifact_path).resolve()
+                else:
+                    artifact_path = artifact_path.resolve()
 
                 env_key = f"DEP_{dep_id.upper()}_ARTIFACT_{idx}"
                 env[env_key] = str(artifact_path)
 
+                if (
+                    issue_artifact is None
+                    and artifact_path.name.startswith("gh_issue_")
+                    and artifact_path.suffix == ".md"
+                ):
+                    issue_artifact = artifact_path
+
             # Also add a summary variable with all artifacts (comma-separated)
             if dep_runtime.artifacts:
                 artifact_paths = [
-                    str(self._repo_dir / Path(a)) if not Path(a).is_absolute() else str(a)
+                    str((self._repo_dir / Path(a)).resolve())
+                    if not Path(a).is_absolute()
+                    else str(Path(a).resolve())
                     for a in dep_runtime.artifacts
                 ]
                 env[f"DEP_{dep_id.upper()}_ARTIFACTS"] = ",".join(artifact_paths)
+
+        if issue_artifact:
+            env.setdefault("ISSUE_MARKDOWN_PATH", str(issue_artifact))
+            env.setdefault("ISSUE_MARKDOWN_DIR", str(issue_artifact.parent))
+            env.setdefault("ISSUE_MARKDOWN_FILENAME", issue_artifact.name)
 
         return env
 
@@ -388,6 +427,8 @@ class Orchestrator:
                     logs=step_data.get("logs", []),
                     manual_input_path=Path(step_data["manual_input_path"]) if step_data.get("manual_input_path") else None,
                     blocked_by_loop=step_data.get("blocked_by_loop"),
+                    notified_failure=step_data.get("notified_failure", False),
+                    notified_human_input=step_data.get("notified_human_input", False),
                 )
             else:
                 steps[step_id] = StepRuntime()
@@ -500,6 +541,66 @@ class Orchestrator:
                 launch.process.terminate()
             launch.close_log()
         self._active_processes.clear()
+
+    def _start_notifications(self) -> None:
+        try:
+            context = RunContext(
+                run_id=self._state.run_id,
+                workflow_name=self._workflow.name,
+                repo_dir=self._repo_dir,
+            )
+            self._notifications.start(context)
+        except Exception:  # pragma: no cover - defensive logging
+            self._log.exception(
+                "failed to start notification service run_id=%s", self._state.run_id
+            )
+
+    def _stop_notifications(self) -> None:
+        try:
+            self._notifications.stop()
+        except Exception:  # pragma: no cover - defensive logging
+            self._log.exception(
+                "failed to stop notification service run_id=%s", self._state.run_id
+            )
+
+    def _build_step_notification(
+        self,
+        step_id: str,
+        runtime: StepRuntime,
+        trigger: str,
+    ) -> StepNotification:
+        return StepNotification(
+            run_id=self._state.run_id,
+            workflow_name=self._workflow.name,
+            step_id=step_id,
+            attempt=runtime.attempts,
+            status=runtime.status,
+            trigger=trigger,
+            manual_input_path=runtime.manual_input_path,
+            report_path=runtime.report_path,
+            logs=list(runtime.logs),
+            last_error=runtime.last_error,
+        )
+
+    def _notify_failure(self, step_id: str, runtime: StepRuntime) -> None:
+        if runtime.notified_failure or runtime.status != StepStatus.FAILED:
+            return
+        notification = self._build_step_notification(step_id, runtime, trigger="failure")
+        try:
+            self._notifications.notify_failure(notification)
+            runtime.notified_failure = True
+        except Exception:  # pragma: no cover - defensive logging
+            self._log.exception("failed to dispatch failure notification step=%s", step_id)
+
+    def _notify_human_input(self, step_id: str, runtime: StepRuntime) -> None:
+        if runtime.notified_human_input or runtime.status != StepStatus.WAITING_ON_HUMAN:
+            return
+        notification = self._build_step_notification(step_id, runtime, trigger="human_input")
+        try:
+            self._notifications.notify_human_input(notification)
+            runtime.notified_human_input = True
+        except Exception:  # pragma: no cover - defensive logging
+            self._log.exception("failed to dispatch human-input notification step=%s", step_id)
 
 
 def build_default_runner(

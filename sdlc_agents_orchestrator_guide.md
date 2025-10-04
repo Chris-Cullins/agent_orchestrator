@@ -29,6 +29,7 @@ Each agent run writes a **Run Report** JSON file that the orchestrator monitors 
 - **Prompt templates** for the agents you listed (planner, coding, e2e, manual testing, docs, code review, PR manager).
 - **A single completion contract**: every step writes `<run_id>__<step_id>.json` to `<repo>/.agents/runs/<run_id>/reports/`.
 - **Guaranteed per-run scaffolding** under `<repo>/.agents/runs/<run_id>/`—reports, logs, artifacts, optional `manual_inputs/`, and `run_state.json` for resume support.
+- **GitHub issue workflow handoffs**: when you export `ISSUE_NUMBER`, the orchestrator writes `artifacts/gh_issue_<ISSUE_NUMBER>.md` and injects `ISSUE_MARKDOWN_PATH`, `ISSUE_MARKDOWN_DIR`, and `ISSUE_MARKDOWN_FILENAME` for downstream steps.
 
 ---
 
@@ -82,6 +83,7 @@ RUN_REPORT_JSON>>>
 
 **Recommended env to pass into agents:**
 - `RUN_ID`, `STEP_ID`, `REPO_DIR`, `REPORT_PATH`, `ARTIFACTS_DIR`
+- GitHub issue workflows also receive `ISSUE_NUMBER`, `ISSUE_MARKDOWN_PATH`, `ISSUE_MARKDOWN_DIR`, and `ISSUE_MARKDOWN_FILENAME` so planners, coders, and docs can link to the generated Markdown snapshot.
 
 **Idempotency:** agents should be safe to re‑run; dedupe with `run_id + step_id`.
 
@@ -291,6 +293,7 @@ a report so the rest of the workflow can continue.
 - **Wrapper safety valves**: Codex/Claude wrappers expose `--timeout`, `--working-dir`, and binary override flags to keep external processes predictable.
 - **Resume support**: `run_state.json` persists in each run directory so `--start-at-step` can rewind a specific step without losing upstream progress.
 - **Concurrent readiness**: the orchestrator launches any dependency-satisfied steps immediately, so parallel branches progress in lockstep without manual scheduling.
+- **Operator alerts**: optional SMTP notifications (configured in `config/email_notifications.yaml`) announce step failures and human-input pauses with run IDs, attempts, and recent log excerpts.
 
 ---
 
@@ -342,6 +345,8 @@ agent_orchestrator/
 │       └── codex_wrapper.py
 ├── tests/
 ├── AGENTS.md
+├── config/
+│   └── email_notifications.yaml
 ├── PLAN.md
 ├── README.md
 ├── requirements.txt

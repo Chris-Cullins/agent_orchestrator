@@ -74,6 +74,7 @@ Tips:
   --env NAME=value --env OTHER=value
   ```
   - The GitHub issue workflow must receive `ISSUE_NUMBER=<issue-id>` via this flag or an exported environment variable before launch.
+  - When `ISSUE_NUMBER` is provided, the orchestrator also injects `ISSUE_MARKDOWN_PATH`, `ISSUE_MARKDOWN_DIR`, and `ISSUE_MARKDOWN_FILENAME` pointing at `.agents/runs/<run_id>/artifacts/gh_issue_<ISSUE_NUMBER>.md` for downstream steps.
 - Let humans approve steps manually:
   ```bash
   --pause-for-human-input
@@ -88,6 +89,7 @@ The orchestrator writes everything under `.agents/` inside the target repo:
 - `runs/<run_id>/reports/` – JSON run reports per step.
 - `runs/<run_id>/logs/` – stdout and stderr for each attempt (attempt number is in the filename).
 - `runs/<run_id>/artifacts/` – Files agents stored via `$ARTIFACTS_DIR` (diffs, summaries, patches, etc.).
+  - GitHub issue workflows now put `gh_issue_<ISSUE_NUMBER>.md` here instead of the repo root.
 - `runs/<run_id>/run_state.json` – Workflow progress (needed for `--start-at-step`).
 - `runs/<run_id>/manual_inputs/` – Created only when you use `--pause-for-human-input` so operators know where to drop approvals.
 Check the per-run `logs/` directory first if something looks off. Run `ls .agents/runs` to confirm the latest `run_id` before tailing logs.
@@ -99,3 +101,9 @@ Check the per-run `logs/` directory first if something looks off. Run `ls .agent
 - Need to rerun clean: delete `.agents/runs/<run_id>/run_state.json` (or clear the run folder) before launching again, or supply a fresh `--run-id` by clearing `.agents/` for that repo.
 
 Keep this file updated whenever we add new wrappers, workflows, or run habits.
+
+## 7. Email Notifications
+- Configure optional step-failure and human-input alerts via `config/email_notifications.yaml` (ships disabled by default).
+- Provide the SMTP host/port, authentication, sender address, and recipient list; toggle `enabled: true` when you are ready.
+- Invalid enabled configs cause the CLI to exit early so operators are never surprised mid-run.
+- Pause alerts link directly to `.agents/runs/<run_id>/manual_inputs/…` so humans know where to drop approvals.

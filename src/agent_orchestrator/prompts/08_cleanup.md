@@ -10,7 +10,7 @@ Clean up all temporary files and artifacts created during this workflow run to p
    - Delete any left over REVIEW.md file from the code review step if it exists
    - Delete any other temporary files created during the workflow
    - Look for files with temporary naming patterns (e.g., `.tmp`, `.bak`, etc.)
-   - Also look for any gh_issue_*.md files.
+   - Also ensure there are no `gh_issue_*.md` files left at the repo root (they should live under `.agents/runs/<run_id>/artifacts/`). Remove any stray root-level copies without touching the run artifacts.
    - Note: Different workflows create different temporary files; only delete files that actually exist
 
 2. **Clean up test artifacts:**

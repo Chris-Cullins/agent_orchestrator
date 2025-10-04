@@ -59,7 +59,7 @@ class PromptResolutionTests(unittest.TestCase):
         )
 
         resolved = orchestrator._resolve_prompt_path("test_prompt.md")
-        self.assertEqual(resolved, self.default_prompt)
+        self.assertEqual(resolved, self.default_prompt.resolve())
 
     def test_uses_local_override_when_exists(self) -> None:
         # Create local override
@@ -79,7 +79,7 @@ class PromptResolutionTests(unittest.TestCase):
         )
 
         resolved = orchestrator._resolve_prompt_path("test_prompt.md")
-        self.assertEqual(resolved, override_prompt)
+        self.assertEqual(resolved, override_prompt.resolve())
 
     def test_uses_local_override_with_subdirectory_prompt_path(self) -> None:
         # Create default prompt in subdirectory
@@ -105,7 +105,7 @@ class PromptResolutionTests(unittest.TestCase):
         )
 
         resolved = orchestrator._resolve_prompt_path("prompts/nested_prompt.md")
-        self.assertEqual(resolved, override_prompt)
+        self.assertEqual(resolved, override_prompt.resolve())
 
     def test_uses_absolute_path_when_provided(self) -> None:
         # Create absolute path prompt

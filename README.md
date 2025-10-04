@@ -191,6 +191,29 @@ python -m agent_orchestrator.cli run \
   --poll-interval 2.0
 ```
 
+```bash
+# GitHub issue workflow (inject the issue ID, receive Markdown paths back)
+python -m agent_orchestrator.cli run \
+  --repo /path/to/your/project \
+  --workflow src/agent_orchestrator/workflows/workflow_github_issue.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
+  --env ISSUE_NUMBER=12345
+```
+
+## Email Notifications
+
+The orchestrator can dispatch email alerts whenever a workflow step fails or pauses awaiting human approval.
+
+- Configure alerts in `config/email_notifications.yaml`. The file ships with `enabled: false` so runs keep their current behaviour until you opt in.
+- Populate `sender`, `recipients`, and the `smtp` block (host/port plus optional `username`/`password`, TLS, timeout). Invalid configurations halt CLI execution with a helpful error message.
+- When enabled, the orchestrator starts the notification service at run launch and sends:
+  - Failure alerts summarising the run, step, attempt, and recent log lines
+  - Pause alerts that point operators at the generated `.agents/runs/<run_id>/manual_inputs/...` file
+- Use `subject_prefix` to brand the subject line (defaults to `[Agent Orchestrator]`).
+- Leave `enabled: false` or remove sensitive credentials if you commit this repository template—operators can override the file in their fork or deployment environment.
+
+When `ISSUE_NUMBER` is provided, the orchestrator populates `ISSUE_MARKDOWN_PATH`, `ISSUE_MARKDOWN_DIR`, and `ISSUE_MARKDOWN_FILENAME` so subsequent steps can load the generated GitHub issue summary without hard-coding paths.
+
 #### Run with Automated Git Worktree Isolation
 ```bash
 python -m agent_orchestrator.cli run \
@@ -342,6 +365,7 @@ Per-run folders under `.agents/runs/<run_id>/` are created for every workflow la
 
 Key takeaways:
 - Review `reports/` for per-step summaries and `logs/` for raw stdout/stderr before debugging a failure.
+- GitHub issue workflows now publish their Markdown handoff to `artifacts/gh_issue_<ISSUE_NUMBER>.md` and export `ISSUE_MARKDOWN_PATH`, `ISSUE_MARKDOWN_DIR`, and `ISSUE_MARKDOWN_FILENAME` so downstream steps and prompts can link to it reliably.
 - Use `run_state.json` together with `--start-at-step` to resume a workflow without re-running completed steps.
 - Prefer deleting the entire `.agents/runs/<run_id>/` folder (or starting a new `--run-id`) to reset state instead of editing `run_state.json` in place.
 
@@ -602,6 +626,22 @@ cat /path/to/your/project/.agents/runs/<run_id>/run_state.json
 # Monitor logs in real-time
 tail -f /path/to/your/project/.agents/runs/<run_id>/logs/*.log
 ```
+
+Inspect the persisted `run_state.json` when debugging loop-backs. Each step now tracks an `iteration_count` that increments every time the orchestrator sends execution back to that step:
+
+```json
+{
+  "steps": {
+    "coding": {
+      "status": "RUNNING",
+      "iteration_count": 2,
+      "last_error": null
+    }
+  }
+}
+```
+
+Use `iteration_count` together with the per-run reports to understand how many times a quality gate has fired. When the count reaches the `--max-iterations` limit (default `4`), the orchestrator marks the step `FAILED` and records the gate failure reason in the logs.
 
 #### Common Command-Line Options
 - `--log-level DEBUG` - Verbose logging for troubleshooting
