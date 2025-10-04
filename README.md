@@ -200,6 +200,18 @@ python -m agent_orchestrator.cli run \
   --env ISSUE_NUMBER=12345
 ```
 
+## Email Notifications
+
+The orchestrator can dispatch email alerts whenever a workflow step fails or pauses awaiting human approval.
+
+- Configure alerts in `config/email_notifications.yaml`. The file ships with `enabled: false` so runs keep their current behaviour until you opt in.
+- Populate `sender`, `recipients`, and the `smtp` block (host/port plus optional `username`/`password`, TLS, timeout). Invalid configurations halt CLI execution with a helpful error message.
+- When enabled, the orchestrator starts the notification service at run launch and sends:
+  - Failure alerts summarising the run, step, attempt, and recent log lines
+  - Pause alerts that point operators at the generated `.agents/runs/<run_id>/manual_inputs/...` file
+- Use `subject_prefix` to brand the subject line (defaults to `[Agent Orchestrator]`).
+- Leave `enabled: false` or remove sensitive credentials if you commit this repository template—operators can override the file in their fork or deployment environment.
+
 When `ISSUE_NUMBER` is provided, the orchestrator populates `ISSUE_MARKDOWN_PATH`, `ISSUE_MARKDOWN_DIR`, and `ISSUE_MARKDOWN_FILENAME` so subsequent steps can load the generated GitHub issue summary without hard-coding paths.
 
 #### Run with Automated Git Worktree Isolation

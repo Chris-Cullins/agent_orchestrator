@@ -68,17 +68,8 @@ error() {
 escape_for_double_quotes() {
     local value="$1"
     value="${value//\\/\\\\}"
-    value="${value//"/\\\"}"
+    value="${value//\"/\\\"}"
     printf '%s' "$value"
-}
-
-escape_path_for_systemd() {
-    "${PYTHON_HELPER}" -c 'import os, sys; path = os.path.expanduser(sys.argv[1]);
-path = path.replace("\\", "\\x5c")
-path = path.replace(" ", "\\x20")
-path = path.replace("\t", "\\x09")
-path = path.replace("\n", "")
-print(path)' "$1"
 }
 
 quote_for_systemd() {
@@ -91,7 +82,8 @@ resolve_path() {
 
 sanitize_unit_name() {
     local raw="$1"
-    local value="${raw,,}"
+    local value
+    value="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
     value="${value//[^a-z0-9]/-}"
     while [[ "$value" == *--* ]]; do
         value="${value//--/-}"
@@ -115,11 +107,15 @@ run_systemctl() {
     fi
 
     if ! command -v "$SYSTEMCTL_BIN" >/dev/null 2>&1; then
-        error "systemctl binary not found (looked for \"${SYSTEMCTL_BIN}\"). Set SYSTEMCTL_BIN or install systemd."
+        local missing_msg
+        missing_msg="systemctl binary not found; expected '${SYSTEMCTL_BIN}'. Set SYSTEMCTL_BIN or install systemd."
+        error "$missing_msg"
     fi
 
     if ! "$SYSTEMCTL_BIN" --user "$@"; then
-        error "systemctl --user $* failed. Ensure a user systemd instance is active (try \"loginctl enable-linger $(whoami)\")."
+        local failure_msg
+        failure_msg="systemctl --user $* failed. Ensure a user systemd instance is active. For example, run: loginctl enable-linger <username>"
+        error "$failure_msg"
     fi
 }
 
@@ -201,10 +197,6 @@ install_units() {
                 SKIP_SYSTEMCTL=1
                 shift
                 ;;
-            --unit-name=*)
-                unit_name="${1#*=}"
-                shift
-                ;;
             --repo=*)
                 repo_path="${1#*=}"
                 shift
@@ -219,6 +211,10 @@ install_units() {
                 ;;
             --python=*)
                 python_bin="${1#*=}"
+                shift
+                ;;
+            --unit-name=*)
+                unit_name="${1#*=}"
                 shift
                 ;;
             --calendar=*)
@@ -239,10 +235,6 @@ install_units() {
                 ;;
             --env=*)
                 env_pairs+=("${1#*=}")
-                shift
-                ;;
-            --no-enable|--start-now)
-                # Already handled above, but support =true syntax gracefully
                 shift
                 ;;
             --help|-h)
@@ -275,13 +267,26 @@ install_units() {
     else
         python_bin="$(resolve_path "$python_bin")"
     fi
-
     [[ -n "$python_bin" ]] || error "Python interpreter not found; pass --python"
     [[ -x "$python_bin" ]] || error "Python interpreter is not executable: $python_bin"
 
-    local flock_bin
-    flock_bin="${FLOCK_BIN:-$(command -v flock || true)}"
-    [[ -n "$flock_bin" ]] || error "flock utility not found; install util-linux"
+    local flock_bin=""
+    local use_flock=1
+
+    if [[ -n "${FLOCK_BIN:-}" ]]; then
+        if command -v "${FLOCK_BIN}" >/dev/null 2>&1; then
+            flock_bin="$(command -v "${FLOCK_BIN}")"
+        elif [[ -x "${FLOCK_BIN}" ]]; then
+            flock_bin="$(resolve_path "${FLOCK_BIN}")"
+        else
+            error "flock binary specified via FLOCK_BIN not found or not executable: ${FLOCK_BIN}"
+        fi
+    else
+        flock_bin="$(command -v flock || true)"
+        if [[ -z "$flock_bin" ]]; then
+            use_flock=0
+        fi
+    fi
 
     if [[ -z "$unit_name" ]]; then
         local repo_base workflow_base
@@ -290,7 +295,6 @@ install_units() {
         workflow_base="${workflow_base%.yaml}"
         unit_name="agent-orchestrator-${repo_base}-${workflow_base}"
     fi
-
     unit_name="$(sanitize_unit_name "$unit_name")"
 
     local config_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/systemd/user"
@@ -308,78 +312,114 @@ install_units() {
     local service_unit="$config_dir/$unit_name.service"
     local timer_unit="$config_dir/$unit_name.timer"
     local log_file="$log_dir/$unit_name.log"
-    local escaped_log_dir="$(escape_for_double_quotes "$log_dir")"
 
     mkdir -p "$config_dir" "$runner_dir" "$log_dir" "$lock_dir"
 
+    local escaped_log="$(escape_for_double_quotes "$log_file")"
+    local escaped_log_dir="$(escape_for_double_quotes "$log_dir")"
     local escaped_repo="$(escape_for_double_quotes "$repo_path")"
     local escaped_workflow="$(escape_for_double_quotes "$workflow_path")"
     local escaped_wrapper="$(escape_for_double_quotes "$wrapper_path")"
     local escaped_python="$(escape_for_double_quotes "$python_bin")"
-    local escaped_flock="$(escape_for_double_quotes "$flock_bin")"
     local escaped_lock="$(escape_for_double_quotes "$lock_file")"
-    local escaped_log="$(escape_for_double_quotes "$log_file")"
-
-    local -a top_level_args
-    local -a cmd_lines
-    cmd_lines+=("--repo \"$escaped_repo\"")
-    cmd_lines+=("--workflow \"$escaped_workflow\"")
-    cmd_lines+=("--wrapper \"$escaped_wrapper\"")
-    cmd_lines+=("--logs-dir \"$escaped_log_dir\"")
-    top_level_args+=("--log-level \"$DEFAULT_LOG_LEVEL\"")
-
-    local escaped_arg
-    for arg in "${wrapper_args[@]}"; do
-        escaped_arg="$(escape_for_double_quotes "$arg")"
-        cmd_lines+=("--wrapper-arg \"$escaped_arg\"")
-    done
-
-    local key value escaped_value
-    for env_entry in "${env_pairs[@]}"; do
-        [[ "$env_entry" == *=* ]] || error "Invalid --env entry (expected KEY=VALUE): $env_entry"
-    done
+    local escaped_flock=""
+    if (( use_flock )); then
+        escaped_flock="$(escape_for_double_quotes "$flock_bin")"
+    fi
 
     {
-        echo "#!/usr/bin/env bash"
-        echo "set -euo pipefail"
-        echo ""
-        echo "LOG_FILE=\"$escaped_log\""
-        echo "mkdir -p \"$(escape_for_double_quotes "$log_dir")\""
-        echo "touch \"$escaped_log\""
-        echo "exec >>\"$escaped_log\" 2>&1"
-        echo ""
-        for env_entry in "${env_pairs[@]}"; do
-            key="${env_entry%%=*}"
-            value="${env_entry#*=}"
-            escaped_value="$(escape_for_double_quotes "$value")"
-            echo "export ${key}=\"$escaped_value\""
-        done
-        echo ""
-        echo "cd \"$escaped_repo\""
-        echo ""
-        echo "exec \"$escaped_flock\" -n \"$escaped_lock\" -- \"$escaped_python\" -m agent_orchestrator.cli \\">
-    } >"$runner_script.tmp"
+        printf '#!/usr/bin/env bash\n'
+        printf 'set -euo pipefail\n\n'
+        printf 'LOG_FILE="%s"\n' "$escaped_log"
+        printf 'mkdir -p "%s"\n' "$escaped_log_dir"
+        printf 'touch "%s"\n' "$escaped_log"
+        printf 'exec >>"%s" 2>&1\n\n' "$escaped_log"
 
-    {
-        local i
-        for ((i = 0; i < ${#top_level_args[@]}; i++)); do
-            echo "  ${top_level_args[$i]} \\">
-        done
-        echo "  run \\">
-        for ((i = 0; i < ${#cmd_lines[@]}; i++)); do
-            local line="  ${cmd_lines[$i]}"
-            if (( i < ${#cmd_lines[@]} - 1 )); then
-                echo "${line} \">
-            else
-                echo "${line}"
-            fi
-        done
-    } >>"$runner_script.tmp"
+        if (( ${#env_pairs[@]} > 0 )); then
+            for env_entry in "${env_pairs[@]}"; do
+                [[ "$env_entry" == *=* ]] || error "Invalid --env entry: expected KEY=VALUE but got $env_entry"
+                local key="${env_entry%%=*}"
+                local value="${env_entry#*=}"
+                local escaped_value="$(escape_for_double_quotes "$value")"
+                printf 'export %s="%s"\n' "$key" "$escaped_value"
+            done
+            printf '\n'
+        fi
 
-    mv "$runner_script.tmp" "$runner_script"
+        printf 'cd "%s"\n\n' "$escaped_repo"
+        printf 'RUN_CMD=(\n'
+        printf '  "%s"\n' "$escaped_python"
+        printf '  "-m"\n'
+        printf '  "agent_orchestrator.cli"\n'
+        printf '  "--log-level"\n'
+        printf '  "%s"\n' "$DEFAULT_LOG_LEVEL"
+        printf '  "run"\n'
+        printf '  "--repo"\n'
+        printf '  "%s"\n' "$escaped_repo"
+        printf '  "--workflow"\n'
+        printf '  "%s"\n' "$escaped_workflow"
+        printf '  "--wrapper"\n'
+        printf '  "%s"\n' "$escaped_wrapper"
+        printf '  "--logs-dir"\n'
+        printf '  "%s"\n' "$escaped_log_dir"
+
+        if (( ${#wrapper_args[@]} > 0 )); then
+            for arg in "${wrapper_args[@]}"; do
+                local escaped_arg="$(escape_for_double_quotes "$arg")"
+                printf '  "--wrapper-arg"\n'
+                printf '  "%s"\n' "$escaped_arg"
+            done
+        fi
+
+        if (( ${#env_pairs[@]} > 0 )); then
+            for env_entry in "${env_pairs[@]}"; do
+                local escaped_env="$(escape_for_double_quotes "$env_entry")"
+                printf '  "--env"\n'
+                printf '  "%s"\n' "$escaped_env"
+            done
+        fi
+
+        printf ')\n\n'
+
+        if (( use_flock )); then
+            printf 'exec "%s" -n "%s" -- "${RUN_CMD[@]}"\n' "$escaped_flock" "$escaped_lock"
+        else
+            printf 'LOCK_FILE="%s"\n' "$escaped_lock"
+            printf 'PYTHON_BIN="%s"\n\n' "$escaped_python"
+            printf "\"$PYTHON_BIN\" - \"$LOCK_FILE\" \"${RUN_CMD[@]}\" <<'PYLOCK'\n"
+            printf "import errno\n"
+            printf "import fcntl\n"
+            printf "import os\n"
+            printf "import subprocess\n"
+            printf "import sys\n\n"
+            printf "if len(sys.argv) < 3:\n"
+            printf "    sys.exit(\"lock path and command required\")\n\n"
+            printf "lock_path = sys.argv[1]\n"
+            printf "command = sys.argv[2:]\n"
+            printf "fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)\n"
+            printf "try:\n"
+            printf "    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+            printf "except OSError as exc:\n"
+            printf "    if exc.errno in (errno.EACCES, errno.EAGAIN):\n"
+            printf "        print(f\"Lock busy at {lock_path}, skipping run.\")\n"
+            printf "        os.close(fd)\n"
+            printf "        sys.exit(0)\n"
+            printf "    os.close(fd)\n"
+            printf "    raise\n"
+            printf "try:\n"
+            printf "    result = subprocess.run(command, check=False)\n"
+            printf "    sys.exit(result.returncode)\n"
+            printf "finally:\n"
+            printf "    os.close(fd)\n"
+            printf "PYLOCK\n"
+            printf "exit $?\n"
+        fi
+    } >"$runner_script"
+
     chmod +x "$runner_script"
+    touch "$log_file"
 
-    local escaped_working_dir="$(escape_path_for_systemd "$repo_path")"
+    local working_dir="$(resolve_path "$repo_path")"
     local quoted_runner="$(quote_for_systemd "$runner_script")"
 
     {
@@ -389,7 +429,7 @@ install_units() {
         echo ""
         echo "[Service]"
         echo "Type=oneshot"
-        echo "WorkingDirectory=$escaped_working_dir"
+        echo "WorkingDirectory=$working_dir"
         echo "ExecStart=$quoted_runner"
         echo "TimeoutStartSec=0"
         echo ""
@@ -405,7 +445,7 @@ install_units() {
         echo "OnCalendar=$calendar"
         echo "AccuracySec=1min"
         echo "Persistent=true"
-        if [[ "$randomized_delay" != "0" && -n "$randomized_delay" ]]; then
+        if [[ -n "$randomized_delay" && "$randomized_delay" != "0" ]]; then
             echo "RandomizedDelaySec=$randomized_delay"
         fi
         echo "Unit=${unit_name}.service"
@@ -484,15 +524,11 @@ uninstall_units() {
     if [[ -f "$timer_unit" ]]; then
         run_systemctl disable --now "${unit_name}.timer"
     fi
-
     if [[ -f "$service_unit" ]]; then
         run_systemctl disable "${unit_name}.service" || true
     fi
 
-    rm -f "$service_unit" "$timer_unit"
-    rm -f "$runner_script"
-    rm -f "$lock_file"
-
+    rm -f "$service_unit" "$timer_unit" "$runner_script" "$lock_file"
     echo "Removed systemd units and helper script for ${unit_name}"
 }
 

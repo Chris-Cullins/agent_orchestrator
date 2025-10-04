@@ -101,3 +101,9 @@ Check the per-run `logs/` directory first if something looks off. Run `ls .agent
 - Need to rerun clean: delete `.agents/runs/<run_id>/run_state.json` (or clear the run folder) before launching again, or supply a fresh `--run-id` by clearing `.agents/` for that repo.
 
 Keep this file updated whenever we add new wrappers, workflows, or run habits.
+
+## 7. Email Notifications
+- Configure optional step-failure and human-input alerts via `config/email_notifications.yaml` (ships disabled by default).
+- Provide the SMTP host/port, authentication, sender address, and recipient list; toggle `enabled: true` when you are ready.
+- Invalid enabled configs cause the CLI to exit early so operators are never surprised mid-run.
+- Pause alerts link directly to `.agents/runs/<run_id>/manual_inputs/…` so humans know where to drop approvals.

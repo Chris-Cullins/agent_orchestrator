@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Allow systemd installer to run without the external `flock` binary and refresh locking message formatting.
 - GitHub issue fetcher now writes issue markdown files to artifacts directory instead of repository root (Issue #56)
   - Updated `src/agent_orchestrator/prompts/22_github_issue_fetcher.md` to write to `${ARTIFACTS_DIR}/gh_issue_${ISSUE_NUMBER}.md`
   - Updated `src/agent_orchestrator/prompts/23_github_issue_planner.md` to read from `${ARTIFACTS_DIR}/gh_issue_*.md`
@@ -15,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cleanup step already handles removing temporary issue files from repository root
 
 ### Added
+- Email notification service for failure and human-input pause events (Issue #55)
+  - Added `agent_orchestrator.notifications` package with SMTP-backed `EmailNotificationService`
+  - Orchestrator now starts/stops the notification service and dispatches structured payloads on failure/pause transitions
+  - CLI validates `config/email_notifications.yaml` and exits when enabled configs are incomplete
+  - Documented configuration workflow in `README.md`, `AGENTS.md`, and `sdlc_agents_orchestrator_guide.md`
+  - Added regression coverage in `tests/test_email_notifications.py` and `tests/test_notification_integration.py`
 - **Loop-back functionality for iterative workflow refinement** (Issue #47)
   - Steps can now send work back to previous steps when quality gates fail
   - Added `loop_back_to` field to Step model for defining loop-back targets
