@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Documentation for persisted state file schema (Issue #32)
+  - Added `docs/state_file_schema.md` providing comprehensive documentation of the `run_state.json` schema
+  - Documents all fields in `RunState` and `StepRuntime` data models with types, descriptions, and semantics
+  - Includes example state files for common scenarios: workflow in progress, loop-back iterations, failures, and human-in-the-loop
+  - Explains operational workflows for resumption, debugging, and understanding loop-back behavior
+  - Provides guidance for operators on troubleshooting and best practices
+
 ### Fixed
 - Allow systemd installer to run without the external `flock` binary and refresh locking message formatting.
 - GitHub issue fetcher now writes issue markdown files to artifacts directory instead of repository root (Issue #56)
