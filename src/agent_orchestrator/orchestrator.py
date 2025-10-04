@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from .gating import GateEvaluator, AlwaysOpenGateEvaluator, CompositeGateEvaluator
 from .models import RunState, Step, StepRuntime, StepStatus, Workflow, utc_now
@@ -151,6 +152,22 @@ class Orchestrator:
             if not self._gates_open(step):
                 continue
 
+            # Initialize loop items if this step has a loop
+            if step.loop and not self._initialize_loop_items(step, runtime):
+                continue  # Loop items not ready yet
+
+            # Check if loop is exhausted
+            if step.loop and not self._should_continue_loop(step, runtime):
+                runtime.status = StepStatus.COMPLETED
+                runtime.loop_completed = True
+                runtime.ended_at = utc_now()
+                self._log.info(
+                    "Loop completed for step=%s after %d iterations",
+                    step_id,
+                    runtime.loop_index,
+                )
+                continue
+
             report_path = self._reports_dir / f"{self._state.run_id}__{step.id}.json"
             manual_input_path = (
                 self._manual_inputs_dir / f"{self._state.run_id}__{step.id}.json"
@@ -162,6 +179,10 @@ class Orchestrator:
 
             # Collect artifacts from dependency steps
             dep_artifacts_env = self._collect_dependency_artifacts(step)
+
+            # Add loop context to environment
+            loop_env = self._get_loop_context_env(step, runtime)
+            dep_artifacts_env.update(loop_env)
 
             runtime.notified_failure = False
             runtime.notified_human_input = False
@@ -190,9 +211,10 @@ class Orchestrator:
                 self._log.exception("failed to launch step=%s", step_id)
                 continue
 
-            self._log.info(
-                "launched step=%s agent=%s attempt=%s", step.id, step.agent, runtime.attempts
-            )
+            log_msg = f"launched step=%s agent=%s attempt=%s"
+            if step.loop:
+                log_msg += f" loop_iteration={runtime.loop_index}/{len(runtime.loop_items)}"
+            self._log.info(log_msg, step.id, step.agent, runtime.attempts)
             self._active_processes[step_id] = launch
             launched = True
         return launched
@@ -255,7 +277,22 @@ class Orchestrator:
                         continue
 
                 if report.status == "COMPLETED":
-                    if runtime.manual_input_path and self._pause_for_human:
+                    # Check if this is a looping step that needs to continue
+                    if step.loop and self._should_continue_loop(step, runtime):
+                        # Advance to next loop iteration
+                        runtime.loop_index += 1
+                        runtime.status = StepStatus.PENDING
+                        runtime.report_path = None
+                        runtime.started_at = None
+                        runtime.ended_at = None
+                        runtime.manual_input_path = None
+                        self._log.info(
+                            "Loop iteration completed for step=%s, advancing to iteration %d/%d",
+                            step_id,
+                            runtime.loop_index,
+                            len(runtime.loop_items),
+                        )
+                    elif runtime.manual_input_path and self._pause_for_human:
                         runtime.status = StepStatus.WAITING_ON_HUMAN
                         runtime.notified_human_input = False
                         self._log.info("awaiting human input step=%s", step_id)
@@ -263,7 +300,15 @@ class Orchestrator:
                     else:
                         runtime.status = StepStatus.COMPLETED
                         runtime.notified_human_input = False
-                        self._log.info("step completed step=%s", step_id)
+                        if step.loop:
+                            runtime.loop_completed = True
+                            self._log.info(
+                                "Loop fully completed for step=%s after %d iterations",
+                                step_id,
+                                runtime.loop_index,
+                            )
+                        else:
+                            self._log.info("step completed step=%s", step_id)
                 else:
                     runtime.status = StepStatus.FAILED
                     runtime.last_error = ", ".join(report.logs[-3:]) if report.logs else "Agent reported failure"
@@ -429,6 +474,9 @@ class Orchestrator:
                     blocked_by_loop=step_data.get("blocked_by_loop"),
                     notified_failure=step_data.get("notified_failure", False),
                     notified_human_input=step_data.get("notified_human_input", False),
+                    loop_index=step_data.get("loop_index", 0),
+                    loop_items=step_data.get("loop_items"),
+                    loop_completed=step_data.get("loop_completed", False),
                 )
             else:
                 steps[step_id] = StepRuntime()
@@ -519,6 +567,147 @@ class Orchestrator:
                 if step_id == to_step:
                     self._state.steps[step_id].iteration_count = old_iteration
                 self._log.info("Reset step=%s to PENDING for loop-back", step_id)
+
+    def _initialize_loop_items(self, step: Step, runtime: StepRuntime) -> bool:
+        """Initialize loop items for a step if it has a loop configuration.
+        Returns True if initialization was successful, False if items are not yet available."""
+        if not step.loop:
+            return True  # No loop, nothing to initialize
+
+        if runtime.loop_items is not None:
+            return True  # Already initialized
+
+        # Get items from configuration
+        if step.loop.items is not None:
+            runtime.loop_items = step.loop.items
+            runtime.loop_index = 0
+            self._log.info("Initialized loop for step=%s with %d items", step.id, len(runtime.loop_items))
+            return True
+
+        if step.loop.items_from_step:
+            # Get items from a previous step's artifacts
+            dep_step_id = step.loop.items_from_step
+            dep_runtime = self._state.steps.get(dep_step_id)
+            if not dep_runtime or dep_runtime.status != StepStatus.COMPLETED:
+                return False  # Dependency not ready yet
+
+            # Load items from the first artifact of the dependency step
+            if not dep_runtime.artifacts:
+                self._log.error(
+                    "Loop source step=%s has no artifacts for step=%s",
+                    dep_step_id,
+                    step.id,
+                )
+                return False
+
+            artifact_path = Path(dep_runtime.artifacts[0])
+            if not artifact_path.is_absolute():
+                artifact_path = self._repo_dir / artifact_path
+
+            try:
+                with artifact_path.open("r") as f:
+                    data = json.load(f)
+                    # Expect the artifact to contain a list or a dict with an "items" key
+                    if isinstance(data, list):
+                        runtime.loop_items = data
+                    elif isinstance(data, dict) and "items" in data:
+                        runtime.loop_items = data["items"]
+                    else:
+                        self._log.error(
+                            "Loop artifact from step=%s has invalid format for step=%s",
+                            dep_step_id,
+                            step.id,
+                        )
+                        return False
+
+                runtime.loop_index = 0
+                self._log.info(
+                    "Initialized loop for step=%s with %d items from step=%s",
+                    step.id,
+                    len(runtime.loop_items),
+                    dep_step_id,
+                )
+                return True
+            except (json.JSONDecodeError, IOError) as e:
+                self._log.error(
+                    "Failed to load loop items from step=%s for step=%s: %s",
+                    dep_step_id,
+                    step.id,
+                    e,
+                )
+                return False
+
+        if step.loop.items_from_artifact:
+            # Load items from a specific artifact file
+            artifact_path = Path(step.loop.items_from_artifact)
+            if not artifact_path.is_absolute():
+                artifact_path = self._repo_dir / artifact_path
+
+            if not artifact_path.exists():
+                return False  # Artifact not ready yet
+
+            try:
+                with artifact_path.open("r") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        runtime.loop_items = data
+                    elif isinstance(data, dict) and "items" in data:
+                        runtime.loop_items = data["items"]
+                    else:
+                        self._log.error(
+                            "Loop artifact has invalid format for step=%s", step.id
+                        )
+                        return False
+
+                runtime.loop_index = 0
+                self._log.info(
+                    "Initialized loop for step=%s with %d items from artifact",
+                    step.id,
+                    len(runtime.loop_items),
+                )
+                return True
+            except (json.JSONDecodeError, IOError) as e:
+                self._log.error("Failed to load loop items for step=%s: %s", step.id, e)
+                return False
+
+        return False
+
+    def _should_continue_loop(self, step: Step, runtime: StepRuntime) -> bool:
+        """Check if a loop should continue to the next iteration."""
+        if not step.loop or not runtime.loop_items:
+            return False
+
+        if runtime.loop_completed:
+            return False
+
+        # Check if we've processed all items
+        if runtime.loop_index >= len(runtime.loop_items):
+            return False
+
+        # Check max_iterations if specified
+        if step.loop.max_iterations is not None:
+            if runtime.loop_index >= step.loop.max_iterations:
+                return False
+
+        # TODO: Implement until_condition evaluation when needed
+
+        return True
+
+    def _get_loop_context_env(self, step: Step, runtime: StepRuntime) -> Dict[str, str]:
+        """Get environment variables for the current loop iteration."""
+        if not step.loop or not runtime.loop_items:
+            return {}
+
+        if runtime.loop_index >= len(runtime.loop_items):
+            return {}
+
+        current_item = runtime.loop_items[runtime.loop_index]
+        env = {
+            f"LOOP_{step.loop.index_var.upper()}": str(runtime.loop_index),
+            f"LOOP_{step.loop.item_var.upper()}": json.dumps(current_item),
+        }
+
+        return env
 
     def _persist_state(self) -> None:
         self._state_persister.save(self._state)

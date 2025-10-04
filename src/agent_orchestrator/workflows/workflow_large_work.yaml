@@ -1,0 +1,47 @@
+name: large_work_pipeline
+description: Workflow for handling large, complex tasks by breaking them into stories and implementing each story sequentially
+
+steps:
+  # Step 1: Break down the large task into stories
+  - id: story_breakdown
+    agent: story_breakdown
+    prompt: src/agent_orchestrator/prompts/24_story_breakdown.md
+    needs: []
+    next_on_success: [story_implementation]
+
+  # Step 2: Loop over each story and implement it
+  - id: story_implementation
+    agent: coding
+    prompt: src/agent_orchestrator/prompts/02_coding.md
+    needs: [story_breakdown]
+    loop:
+      items_from_step: story_breakdown
+      item_var: story
+      index_var: story_index
+    next_on_success: [story_review]
+
+  # Step 3: Review the implementation for the current story
+  - id: story_review
+    agent: code_review
+    prompt: src/agent_orchestrator/prompts/06_code_review.md
+    needs: [story_implementation]
+    loop:
+      items_from_step: story_breakdown
+      item_var: story
+      index_var: story_index
+    loop_back_to: story_implementation
+    next_on_success: [final_docs]
+
+  # Step 4: Update documentation after all stories are complete
+  - id: final_docs
+    agent: docs_updater
+    prompt: src/agent_orchestrator/prompts/05_docs.md
+    needs: [story_review]
+    next_on_success: [merge_pr]
+
+  # Step 5: Merge the PR with all story implementations
+  - id: merge_pr
+    agent: pr_manager
+    prompt: src/agent_orchestrator/prompts/07_pr_manager.md
+    needs: [final_docs]
+    next_on_success: []

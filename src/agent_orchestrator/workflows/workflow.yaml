@@ -13,12 +13,6 @@ steps:
     needs: [dev_architect_plan]
     next_on_success: [code_review]
 
-#  - id: test_creator
- #   agent: e2e_test_writer
- #   prompt: src/agent_orchestrator/prompts/03_e2e.md
- #   needs: [coding_impl]
- #   next_on_success: [code_review]
-
   - id: code_review
     agent: code_review
     prompt: src/agent_orchestrator/prompts/06_code_review.md
