@@ -386,11 +386,19 @@ def test_loopback_resets_attempts_between_iterations(
     launches: List[str] = []
     step_b_attempts: List[int] = []
     target_failures = 3
+    gate_failures_remaining = target_failures
 
     def mock_launch(step, **kwargs):
+        nonlocal gate_failures_remaining
+
         launches.append(step.id)
+
+        gate_failure = False
         if step.id == "step_b":
             step_b_attempts.append(kwargs["attempt"])
+            if gate_failures_remaining > 0:
+                gate_failure = True
+                gate_failures_remaining -= 1
 
         launch = Mock()
         launch.process = Mock()
@@ -398,9 +406,12 @@ def test_loopback_resets_attempts_between_iterations(
         launch.report_path = kwargs["report_path"]
         launch.close_log = Mock()
 
-        def write_delayed_report() -> None:
+        # Ensure we don't read stale reports from previous iterations.
+        if launch.report_path.exists():
+            launch.report_path.unlink()
+
+        def write_delayed_report(gate_failure: bool = gate_failure) -> None:
             time.sleep(0.05)
-            gate_failure = step.id == "step_b"
             write_report(
                 kwargs["report_path"],
                 kwargs["run_id"],
@@ -427,8 +438,8 @@ def test_loopback_resets_attempts_between_iterations(
         state_persister=state_persister,
         runner=mock_runner,
         poll_interval=0.05,
-        max_attempts=1,
-        max_iterations=target_failures,
+        max_attempts=2,
+        max_iterations=target_failures + 5,
         logger=logging.getLogger(__name__),
     )
 
@@ -439,6 +450,7 @@ def test_loopback_resets_attempts_between_iterations(
     run_thread.join(timeout=5.0)
     assert not run_thread.is_alive(), "orchestrator.run did not finish"
 
+    assert gate_failures_remaining == 0
     assert len(step_b_attempts) == target_failures + 1
     assert all(attempt == 1 for attempt in step_b_attempts)
 
