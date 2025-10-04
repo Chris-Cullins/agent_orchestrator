@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Allow systemd installer to run without the external `flock` binary and refresh locking message formatting.
 - GitHub issue fetcher now writes issue markdown files to artifacts directory instead of repository root (Issue #56)
   - Updated `src/agent_orchestrator/prompts/22_github_issue_fetcher.md` to write to `${ARTIFACTS_DIR}/gh_issue_${ISSUE_NUMBER}.md`
   - Updated `src/agent_orchestrator/prompts/23_github_issue_planner.md` to read from `${ARTIFACTS_DIR}/gh_issue_*.md`

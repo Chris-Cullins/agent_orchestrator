@@ -328,20 +328,12 @@ install_units() {
     fi
 
     {
-        printf '#!/usr/bin/env bash
-'
-        printf 'set -euo pipefail
-
-'
-        printf 'LOG_FILE="%s"
-' "$escaped_log"
-        printf 'mkdir -p "%s"
-' "$escaped_log_dir"
-        printf 'touch "%s"
-' "$escaped_log"
-        printf 'exec >>"%s" 2>&1
-
-' "$escaped_log"
+        printf '#!/usr/bin/env bash\n'
+        printf 'set -euo pipefail\n\n'
+        printf 'LOG_FILE="%s"\n' "$escaped_log"
+        printf 'mkdir -p "%s"\n' "$escaped_log_dir"
+        printf 'touch "%s"\n' "$escaped_log"
+        printf 'exec >>"%s" 2>&1\n\n' "$escaped_log"
 
         if (( ${#env_pairs[@]} > 0 )); then
             for env_entry in "${env_pairs[@]}"; do
@@ -349,187 +341,79 @@ install_units() {
                 local key="${env_entry%%=*}"
                 local value="${env_entry#*=}"
                 local escaped_value="$(escape_for_double_quotes "$value")"
-                printf 'export %s="%s"
-' "$key" "$escaped_value"
+                printf 'export %s="%s"\n' "$key" "$escaped_value"
             done
-            printf '
-'
+            printf '\n'
         fi
 
-        printf 'cd "%s"
+        printf 'cd "%s"\n\n' "$escaped_repo"
+        printf 'RUN_CMD=(\n'
+        printf '  "%s"\n' "$escaped_python"
+        printf '  "-m"\n'
+        printf '  "agent_orchestrator.cli"\n'
+        printf '  "--log-level"\n'
+        printf '  "%s"\n' "$DEFAULT_LOG_LEVEL"
+        printf '  "run"\n'
+        printf '  "--repo"\n'
+        printf '  "%s"\n' "$escaped_repo"
+        printf '  "--workflow"\n'
+        printf '  "%s"\n' "$escaped_workflow"
+        printf '  "--wrapper"\n'
+        printf '  "%s"\n' "$escaped_wrapper"
+        printf '  "--logs-dir"\n'
+        printf '  "%s"\n' "$escaped_log_dir"
 
-' "$escaped_repo"
+        if (( ${#wrapper_args[@]} > 0 )); then
+            for arg in "${wrapper_args[@]}"; do
+                local escaped_arg="$(escape_for_double_quotes "$arg")"
+                printf '  "--wrapper-arg"\n'
+                printf '  "%s"\n' "$escaped_arg"
+            done
+        fi
+
+        if (( ${#env_pairs[@]} > 0 )); then
+            for env_entry in "${env_pairs[@]}"; do
+                local escaped_env="$(escape_for_double_quotes "$env_entry")"
+                printf '  "--env"\n'
+                printf '  "%s"\n' "$escaped_env"
+            done
+        fi
+
+        printf ')\n\n'
 
         if (( use_flock )); then
-            printf 'exec "%s" -n "%s" -- "%s" -m agent_orchestrator.cli \
-' "$escaped_flock" "$escaped_lock" "$escaped_python"
-            printf '  --log-level "%s" \
-' "$DEFAULT_LOG_LEVEL"
-            printf '  run \
-'
-            printf '  --repo "%s" \
-' "$escaped_repo"
-            printf '  --workflow "%s" \
-' "$escaped_workflow"
-            printf '  --wrapper "%s" \
-' "$escaped_wrapper"
-            printf '  --logs-dir "%s"' "$escaped_log_dir"
-            if (( ${#wrapper_args[@]} > 0 || ${#env_pairs[@]} > 0 )); then
-                printf ' \
-'
-            else
-                printf '
-'
-            fi
-
-            if (( ${#wrapper_args[@]} > 0 )); then
-                local idx=0
-                for arg in "${wrapper_args[@]}"; do
-                    local escaped_arg="$(escape_for_double_quotes "$arg")"
-                    printf '  --wrapper-arg "%s"' "$escaped_arg"
-                    (( idx++ ))
-                    if (( idx < ${#wrapper_args[@]} || ${#env_pairs[@]} > 0 )); then
-                        printf ' \
-'
-                    else
-                        printf '
-'
-                    fi
-                done
-            fi
-
-            if (( ${#env_pairs[@]} > 0 )); then
-                local env_idx=0
-                for env_entry in "${env_pairs[@]}"; do
-                    local escaped_env="$(escape_for_double_quotes "$env_entry")"
-                    printf '  --env "%s"' "$escaped_env"
-                    (( env_idx++ ))
-                    if (( env_idx < ${#env_pairs[@]} )); then
-                        printf ' \
-'
-                    else
-                        printf '
-'
-                    fi
-                done
-            fi
+            printf 'exec "%s" -n "%s" -- "${RUN_CMD[@]}"\n' "$escaped_flock" "$escaped_lock"
         else
-            printf 'LOCK_FILE="%s"
-' "$escaped_lock"
-            printf 'PYTHON_BIN="%s"
-' "$escaped_python"
-            printf 'COMMAND=(
-'
-            printf '  "%s"
-' "$escaped_python"
-            printf '  "-m"
-'
-            printf '  "agent_orchestrator.cli"
-'
-            printf '  "--log-level"
-'
-            printf '  "%s"
-' "$DEFAULT_LOG_LEVEL"
-            printf '  "run"
-'
-            printf '  "--repo"
-'
-            printf '  "%s"
-' "$escaped_repo"
-            printf '  "--workflow"
-'
-            printf '  "%s"
-' "$escaped_workflow"
-            printf '  "--wrapper"
-'
-            printf '  "%s"
-' "$escaped_wrapper"
-            printf '  "--logs-dir"
-'
-            printf '  "%s"
-' "$escaped_log_dir"
-
-            if (( ${#wrapper_args[@]} > 0 )); then
-                for arg in "${wrapper_args[@]}"; do
-                    local escaped_arg="$(escape_for_double_quotes "$arg")"
-                    printf '  "--wrapper-arg"
-'
-                    printf '  "%s"
-' "$escaped_arg"
-                done
-            fi
-
-            if (( ${#env_pairs[@]} > 0 )); then
-                for env_entry in "${env_pairs[@]}"; do
-                    local escaped_env="$(escape_for_double_quotes "$env_entry")"
-                    printf '  "--env"
-'
-                    printf '  "%s"
-' "$escaped_env"
-                done
-            fi
-
-            printf ')
-
-'
-            printf '"$PYTHON_BIN" - "$LOCK_FILE" "${COMMAND[@]}" <<'''PYLOCK'''
-'
-            printf 'import errno
-'
-            printf 'import fcntl
-'
-            printf 'import os
-'
-            printf 'import subprocess
-'
-            printf 'import sys
-
-'
-            printf 'if len(sys.argv) < 3:
-'
-            printf '    sys.exit("lock path and command required")
-
-'
-            printf 'lock_path = sys.argv[1]
-'
-            printf 'command = sys.argv[2:]
-'
-            printf 'fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
-'
-            printf 'try:
-'
-            printf '    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-'
-            printf 'except OSError as exc:
-'
-            printf '    if exc.errno in (errno.EACCES, errno.EAGAIN):
-'
-            printf '        print(f"Lock busy at {lock_path}, skipping run.")
-'
-            printf '        os.close(fd)
-'
-            printf '        sys.exit(0)
-'
-            printf '    os.close(fd)
-'
-            printf '    raise
-'
-            printf 'try:
-'
-            printf '    result = subprocess.run(command, check=False)
-'
-            printf '    sys.exit(result.returncode)
-'
-            printf 'finally:
-'
-            printf '    os.close(fd)
-'
-            printf 'PYLOCK
-'
-            printf 'exit $?
-'
+            printf 'LOCK_FILE="%s"\n' "$escaped_lock"
+            printf 'PYTHON_BIN="%s"\n\n' "$escaped_python"
+            printf "\"$PYTHON_BIN\" - \"$LOCK_FILE\" \"${RUN_CMD[@]}\" <<'PYLOCK'\n"
+            printf "import errno\n"
+            printf "import fcntl\n"
+            printf "import os\n"
+            printf "import subprocess\n"
+            printf "import sys\n\n"
+            printf "if len(sys.argv) < 3:\n"
+            printf "    sys.exit(\"lock path and command required\")\n\n"
+            printf "lock_path = sys.argv[1]\n"
+            printf "command = sys.argv[2:]\n"
+            printf "fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)\n"
+            printf "try:\n"
+            printf "    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+            printf "except OSError as exc:\n"
+            printf "    if exc.errno in (errno.EACCES, errno.EAGAIN):\n"
+            printf "        print(f\"Lock busy at {lock_path}, skipping run.\")\n"
+            printf "        os.close(fd)\n"
+            printf "        sys.exit(0)\n"
+            printf "    os.close(fd)\n"
+            printf "    raise\n"
+            printf "try:\n"
+            printf "    result = subprocess.run(command, check=False)\n"
+            printf "    sys.exit(result.returncode)\n"
+            printf "finally:\n"
+            printf "    os.close(fd)\n"
+            printf "PYLOCK\n"
+            printf "exit $?\n"
         fi
-
     } >"$runner_script"
 
     chmod +x "$runner_script"

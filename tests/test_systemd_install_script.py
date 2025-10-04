@@ -30,6 +30,22 @@ def run_installer(tmp_path, args):
     )
 
 
+def _extract_run_cmd(script_text: str) -> list[str]:
+    tokens: list[str] = []
+    collecting = False
+    for line in script_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("RUN_CMD=("):
+            collecting = True
+            continue
+        if collecting:
+            if stripped == ")":
+                break
+            if stripped.startswith('"') and stripped.endswith('"'):
+                tokens.append(stripped[1:-1])
+    return tokens
+
+
 def test_install_writes_units_and_runner(tmp_path):
     target_repo = tmp_path / "repo"
     target_repo.mkdir()
@@ -90,14 +106,24 @@ def test_install_writes_units_and_runner(tmp_path):
 
     runner_text = runner_script.read_text()
     assert f'cd "{target_repo}"' in runner_text
-    assert f'--repo "{target_repo}"' in runner_text
-    assert f'--workflow "{WORKFLOW_PATH}"' in runner_text
-    assert 'agent_orchestrator.cli \\' in runner_text
-    assert '--log-level "INFO"' in runner_text
-    assert 'run \\' in runner_text
-    assert '--wrapper-arg "--foo"' in runner_text
-    assert '--wrapper-arg "bar"' in runner_text
     assert 'export CODEX_EXEC_BIN="/usr/bin/codex"' in runner_text
+    run_cmd = _extract_run_cmd(runner_text)
+    assert run_cmd[0] == sys.executable
+    assert run_cmd[1:3] == ["-m", "agent_orchestrator.cli"]
+    repo_idx = run_cmd.index("--repo")
+    assert run_cmd[repo_idx + 1] == str(target_repo)
+    workflow_idx = run_cmd.index("--workflow")
+    assert run_cmd[workflow_idx + 1] == str(WORKFLOW_PATH)
+    wrapper_idx = run_cmd.index("--wrapper")
+    assert run_cmd[wrapper_idx + 1] == str(WRAPPER_PATH)
+    logs_idx = run_cmd.index("--logs-dir")
+    assert run_cmd[logs_idx + 1] == str(log_dir)
+    assert "--wrapper-arg" in run_cmd
+    args_after = [run_cmd[i + 1] for i, token in enumerate(run_cmd) if token == "--wrapper-arg"]
+    assert args_after == ["--foo", "bar"]
+    env_idx = run_cmd.index("--env")
+    assert run_cmd[env_idx + 1] == "CODEX_EXEC_BIN=/usr/bin/codex"
+    assert 'exec "/usr/bin/true" -n' in runner_text
 
     mode = runner_script.stat().st_mode
     assert mode & stat.S_IXUSR
