@@ -338,7 +338,7 @@ your-target-repo/
             └── run_state.json      # Persisted workflow state for --start-at-step resumes
 ```
 
-Per-run folders under `.agents/runs/<run_id>/` are created for every workflow launch, even without git worktrees, so you can safely inspect `reports/`, `logs/`, `artifacts/`, and the persisted `run_state.json` without interfering with a live run. The `manual_inputs/` directory appears only when you pass `--pause-for-human-input` and serves as the drop location for approval files. Agent-generated artifacts (like planning inventories or review notes) are stored under `artifacts/` using per-step subdirectories.
+Per-run folders under `.agents/runs/<run_id>/` are created for every workflow launch, even without git worktrees, so you can safely inspect `reports/`, `logs/`, `artifacts/`, and the persisted `run_state.json` without interfering with a live run. The `manual_inputs/` directory appears only when you pass `--pause-for-human-input` and serves as the drop location for approval files. Agent-generated artifacts (like planning inventories, review notes, or GitHub issue files) are stored under `artifacts/` using per-step subdirectories. For example, when running a GitHub issue workflow, the fetcher writes `gh_issue_${ISSUE_NUMBER}.md` to the artifacts directory, keeping the repository root clean.
 
 Key takeaways:
 - Review `reports/` for per-step summaries and `logs/` for raw stdout/stderr before debugging a failure.
