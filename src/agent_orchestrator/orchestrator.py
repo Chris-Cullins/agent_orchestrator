@@ -521,7 +521,7 @@ class Orchestrator:
         # Increment iteration count for the step that triggered the loop-back
         from_runtime = self._state.steps[from_step]
         from_runtime.iteration_count += 1
-
+        from_runtime.attempts = 0  # Reset attempts for the new loop iteration
 
         # Requeue the source step so it runs again after upstream steps rerun.
         from_runtime.status = StepStatus.PENDING

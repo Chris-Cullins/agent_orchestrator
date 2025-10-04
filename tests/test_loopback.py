@@ -377,6 +377,72 @@ def test_iteration_count_increments(temp_repo: Path, report_reader: RunReportRea
     assert step_b_runtime.iteration_count >= 1, "iteration_count should increment after loop-back"
 
 
+def test_loopback_resets_attempts_between_iterations(
+    temp_repo: Path, report_reader: RunReportReader, state_persister: RunStatePersister
+):
+    """Ensure gate retries get fresh attempt counters for each loop iteration."""
+    workflow = create_workflow_with_loopback()
+
+    launches: List[str] = []
+    step_b_attempts: List[int] = []
+    target_failures = 3
+
+    def mock_launch(step, **kwargs):
+        launches.append(step.id)
+        if step.id == "step_b":
+            step_b_attempts.append(kwargs["attempt"])
+
+        launch = Mock()
+        launch.process = Mock()
+        launch.process.poll = Mock(return_value=None)
+        launch.report_path = kwargs["report_path"]
+        launch.close_log = Mock()
+
+        def write_delayed_report() -> None:
+            time.sleep(0.05)
+            gate_failure = step.id == "step_b"
+            write_report(
+                kwargs["report_path"],
+                kwargs["run_id"],
+                step.id,
+                step.agent,
+                status="COMPLETED",
+                gate_failure=gate_failure,
+            )
+            launch.process.poll = Mock(return_value=0)
+
+        import threading
+
+        threading.Thread(target=write_delayed_report, daemon=True).start()
+        return launch
+
+    mock_runner = Mock(spec=StepRunner)
+    mock_runner.launch = Mock(side_effect=mock_launch)
+
+    orchestrator = Orchestrator(
+        workflow=workflow,
+        workflow_root=temp_repo,
+        repo_dir=temp_repo,
+        report_reader=report_reader,
+        state_persister=state_persister,
+        runner=mock_runner,
+        poll_interval=0.05,
+        max_attempts=1,
+        max_iterations=target_failures,
+        logger=logging.getLogger(__name__),
+    )
+
+    import threading
+
+    run_thread = threading.Thread(target=orchestrator.run, daemon=True)
+    run_thread.start()
+    run_thread.join(timeout=5.0)
+    assert not run_thread.is_alive(), "orchestrator.run did not finish"
+
+    assert len(step_b_attempts) == target_failures + 1
+    assert all(attempt == 1 for attempt in step_b_attempts)
+
+
 def test_loopback_without_gate_failure(temp_repo: Path, report_reader: RunReportReader, state_persister: RunStatePersister):
     """Test that workflow completes normally without gate failure."""
     workflow = create_workflow_with_loopback()
