@@ -1,0 +1,15 @@
+# Default email notification settings for the SDLC agent orchestrator.
+# Notifications are disabled by default; update the SMTP fields and toggle
+# `enabled` to true to activate alerts on workflow failures or manual pauses.
+enabled: false
+sender: "orchestrator@example.com"
+recipients:
+  - "dev-team@example.com"
+smtp:
+  host: "smtp.example.com"
+  port: 587
+  username: "orchestrator"
+  password: "change-me"
+  use_tls: true
+  timeout: 30
+subject_prefix: "[Agent Orchestrator]"

@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from .gating import CompositeGateEvaluator, AlwaysOpenGateEvaluator, FileBackedGateEvaluator
+from .notifications import NotificationService
+from .notifications.email import EmailConfigError, build_email_notification_service
 from .orchestrator import Orchestrator, build_default_runner
 from .reporting import RunReportReader
 from .runner import ExecutionTemplate, StepRunner
@@ -32,6 +34,14 @@ def parse_env(env_pairs: Optional[list[str]]) -> Dict[str, str]:
         key, value = item.split("=", 1)
         result[key] = value
     return result
+
+
+def _build_notification_service(repo_dir: Path) -> NotificationService:
+    email_logger = logging.getLogger("agent_orchestrator.email")
+    try:
+        return build_email_notification_service(repo_dir, logger=email_logger)
+    except EmailConfigError as exc:
+        raise SystemExit(f"Email notification configuration error: {exc}") from exc
 
 
 def build_runner(
@@ -187,6 +197,7 @@ def run_from_args(args: argparse.Namespace) -> None:
             logger=logging.getLogger("agent_orchestrator"),
             run_id=run_id_override,
             start_at_step=args.start_at_step,
+            notification_service=_build_notification_service(run_repo_dir),
         )
 
         orchestrator.run()

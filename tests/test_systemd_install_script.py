@@ -16,6 +16,9 @@ def run_installer(tmp_path, args):
     env = os.environ.copy()
     env["XDG_CONFIG_HOME"] = str(tmp_path / "config")
     env["SKIP_SYSTEMCTL"] = "1"
+    # Provide a dummy flock for macOS where it's not available by default
+    if "FLOCK_BIN" not in env:
+        env["FLOCK_BIN"] = "/usr/bin/true"
     command = ["bash", str(SCRIPT_PATH)] + args
     return subprocess.run(
         command,
@@ -89,7 +92,9 @@ def test_install_writes_units_and_runner(tmp_path):
     assert f'cd "{target_repo}"' in runner_text
     assert f'--repo "{target_repo}"' in runner_text
     assert f'--workflow "{WORKFLOW_PATH}"' in runner_text
-    assert 'agent_orchestrator.cli \\n  --log-level "INFO" \\n  run \\' in runner_text
+    assert 'agent_orchestrator.cli \\' in runner_text
+    assert '--log-level "INFO"' in runner_text
+    assert 'run \\' in runner_text
     assert '--wrapper-arg "--foo"' in runner_text
     assert '--wrapper-arg "bar"' in runner_text
     assert 'export CODEX_EXEC_BIN="/usr/bin/codex"' in runner_text

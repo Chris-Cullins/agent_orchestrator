@@ -293,6 +293,7 @@ a report so the rest of the workflow can continue.
 - **Wrapper safety valves**: Codex/Claude wrappers expose `--timeout`, `--working-dir`, and binary override flags to keep external processes predictable.
 - **Resume support**: `run_state.json` persists in each run directory so `--start-at-step` can rewind a specific step without losing upstream progress.
 - **Concurrent readiness**: the orchestrator launches any dependency-satisfied steps immediately, so parallel branches progress in lockstep without manual scheduling.
+- **Operator alerts**: optional SMTP notifications (configured in `config/email_notifications.yaml`) announce step failures and human-input pauses with run IDs, attempts, and recent log excerpts.
 
 ---
 
@@ -344,6 +345,8 @@ agent_orchestrator/
 │       └── codex_wrapper.py
 ├── tests/
 ├── AGENTS.md
+├── config/
+│   └── email_notifications.yaml
 ├── PLAN.md
 ├── README.md
 ├── requirements.txt

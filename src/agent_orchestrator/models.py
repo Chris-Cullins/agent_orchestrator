@@ -73,6 +73,8 @@ class StepRuntime:
     logs: List[str] = field(default_factory=list)
     manual_input_path: Optional[Path] = None
     blocked_by_loop: Optional[str] = None
+    notified_failure: bool = False
+    notified_human_input: bool = False
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -88,6 +90,8 @@ class StepRuntime:
             "logs": self.logs,
             "manual_input_path": str(self.manual_input_path) if self.manual_input_path else None,
             "blocked_by_loop": self.blocked_by_loop,
+            "notified_failure": self.notified_failure,
+            "notified_human_input": self.notified_human_input,
         }
 
 
