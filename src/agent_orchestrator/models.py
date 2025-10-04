@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .time_utils import ISO_FORMAT, utc_now
 
@@ -15,6 +15,25 @@ class StepStatus(str, Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     SKIPPED = "SKIPPED"
+
+
+@dataclass
+class LoopConfig:
+    """Configuration for loop control structure."""
+
+    # Source of items to iterate over
+    # Can be a list of items directly, or a reference to a previous step's output
+    items: Optional[List[Any]] = None
+    items_from_step: Optional[str] = None  # Reference to step that outputs items
+    items_from_artifact: Optional[str] = None  # Path to artifact containing items
+
+    # Exit conditions
+    max_iterations: Optional[int] = None
+    until_condition: Optional[str] = None  # Expression to evaluate for exit
+
+    # Variable names for loop context
+    item_var: str = "item"  # Name of variable for current item
+    index_var: str = "index"  # Name of variable for current index
 
 
 @dataclass
@@ -30,6 +49,7 @@ class Step:
     loop_back_to: Optional[str] = None
     human_in_the_loop: bool = False
     metadata: Dict[str, str] = field(default_factory=dict)
+    loop: Optional[LoopConfig] = None
 
 
 @dataclass
@@ -75,6 +95,10 @@ class StepRuntime:
     blocked_by_loop: Optional[str] = None
     notified_failure: bool = False
     notified_human_input: bool = False
+    # Loop state
+    loop_index: int = 0  # Current loop iteration index
+    loop_items: Optional[List[Any]] = None  # Items being iterated over
+    loop_completed: bool = False  # Whether loop has finished all iterations
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -92,6 +116,9 @@ class StepRuntime:
             "blocked_by_loop": self.blocked_by_loop,
             "notified_failure": self.notified_failure,
             "notified_human_input": self.notified_human_input,
+            "loop_index": self.loop_index,
+            "loop_items": self.loop_items,
+            "loop_completed": self.loop_completed,
         }
 
 

@@ -7,36 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- GitHub issue fetcher now writes issue markdown files to artifacts directory instead of repository root (Issue #56)
-  - Updated `src/agent_orchestrator/prompts/22_github_issue_fetcher.md` to write to `${ARTIFACTS_DIR}/gh_issue_${ISSUE_NUMBER}.md`
-  - Updated `src/agent_orchestrator/prompts/23_github_issue_planner.md` to read from `${ARTIFACTS_DIR}/gh_issue_*.md`
-  - Removed all legacy `gh_issue_*.md` files from repository root
-  - Cleanup step already handles removing temporary issue files from repository root
-
 ### Added
+- **Loop control structure for iterating over collections in workflows** (Issue #63)
+  - Added `LoopConfig` model to define loop behavior with multiple item sources
+  - Added `loop` field to Step model for configuring iteration over collections
+  - Loop items can be sourced from:
+    - Static list in workflow YAML (`items`)
+    - Output from previous step (`items_from_step`)
+    - Artifact file (`items_from_artifact`)
+  - Added loop state tracking fields to `StepRuntime`: `loop_index`, `loop_items`, `loop_completed`
+  - Implemented loop initialization, iteration, and completion logic in orchestrator
+  - Loop context passed to agents via environment variables (`LOOP_INDEX`, `LOOP_ITEM`)
+  - Support for `max_iterations` constraint to limit loop execution
+  - Added comprehensive test suite in `tests/test_loop_control.py`
+  - Created workflow `workflows/workflow_large_work.yaml` demonstrating story-based development
+  - Added agent prompts for story breakdown and story detail planning:
+    - `prompts/24_story_breakdown.md` - Decomposes large tasks into 3-10 stories
+    - `prompts/25_story_detail_planner.md` - Creates detailed plan for each story
+  - Enables multi-story development workflows where each story goes through full dev cycle
+
 - Documentation for persisted state file schema (Issue #32)
   - Added `docs/state_file_schema.md` providing comprehensive documentation of the `run_state.json` schema
   - Documents all fields in `RunState` and `StepRuntime` data models with types, descriptions, and semantics
   - Includes example state files for common scenarios: workflow in progress, loop-back iterations, failures, and human-in-the-loop
   - Explains operational workflows for resumption, debugging, and understanding loop-back behavior
   - Provides guidance for operators on troubleshooting and best practices
-
-### Fixed
-- Allow systemd installer to run without the external `flock` binary and refresh locking message formatting.
-- GitHub issue fetcher now writes issue markdown files to artifacts directory instead of repository root (Issue #56)
-  - Updated `src/agent_orchestrator/prompts/22_github_issue_fetcher.md` to write to `${ARTIFACTS_DIR}/gh_issue_${ISSUE_NUMBER}.md`
-  - Updated `src/agent_orchestrator/prompts/23_github_issue_planner.md` to read from `${ARTIFACTS_DIR}/gh_issue_*.md`
-  - Removed all legacy `gh_issue_*.md` files from repository root
-  - Cleanup step already handles removing temporary issue files from repository root
-
-### Added
 - Email notification service for failure and human-input pause events (Issue #55)
   - Added `agent_orchestrator.notifications` package with SMTP-backed `EmailNotificationService`
   - Orchestrator now starts/stops the notification service and dispatches structured payloads on failure/pause transitions
   - CLI validates `config/email_notifications.yaml` and exits when enabled configs are incomplete
   - Documented configuration workflow in `README.md`, `AGENTS.md`, and `sdlc_agents_orchestrator_guide.md`
   - Added regression coverage in `tests/test_email_notifications.py` and `tests/test_notification_integration.py`
+
+### Fixed
+- GitHub issue fetcher now writes issue markdown files to artifacts directory instead of repository root (Issue #56)
+  - Updated `src/agent_orchestrator/prompts/22_github_issue_fetcher.md` to write to `${ARTIFACTS_DIR}/gh_issue_${ISSUE_NUMBER}.md`
+  - Updated `src/agent_orchestrator/prompts/23_github_issue_planner.md` to read from `${ARTIFACTS_DIR}/gh_issue_*.md`
+  - Removed all legacy `gh_issue_*.md` files from repository root
+  - Cleanup step already handles removing temporary issue files from repository root
+- Allow systemd installer to run without the external `flock` binary and refresh locking message formatting.
+
+### Previous Additions
 - **Loop-back functionality for iterative workflow refinement** (Issue #47)
   - Steps can now send work back to previous steps when quality gates fail
   - Added `loop_back_to` field to Step model for defining loop-back targets

@@ -60,6 +60,7 @@ Select one of the predefined workflows or create your own:
 **Available Workflows:**
 - `src/agent_orchestrator/workflows/workflow.yaml` - Complete SDLC pipeline (planning → coding → testing → review → docs → merge)
 - `src/agent_orchestrator/workflows/workflow_backlog_miner.yaml` - Architecture review and tech debt analysis
+- `src/agent_orchestrator/workflows/workflow_large_work.yaml` - Large task decomposition with loop-based story implementation
 
 ### Step 3: Configure Your AI Agent Platform
 
@@ -501,19 +502,100 @@ steps:
     prompt: src/agent_orchestrator/prompts/01_planning.md
     needs: []
     next_on_success: [implementation]
-    
+
   - id: implementation
     agent: coder
     prompt: src/agent_orchestrator/prompts/02_coding.md
     needs: [planning]
     next_on_success: [testing]
-    
+
   - id: testing
     agent: tester
     prompt: src/agent_orchestrator/prompts/03_e2e.md
     needs: [implementation]
     next_on_success: []
 ```
+
+#### Advanced Feature: Loop Control for Iterating Over Collections
+
+The orchestrator supports **loop control** functionality, allowing steps to iterate over collections of items. This is useful for processing multiple stories, features, or data items sequentially.
+
+**How Loop Control Works:**
+
+1. A step can be configured with a `loop` field that specifies the source of items
+2. The step executes once for each item in the collection
+3. Loop context (current item and index) is passed to the agent via environment variables
+4. The step proceeds to the next item until all items are processed
+
+**Loop Configuration Options:**
+
+```yaml
+loop:
+  items: [item1, item2, item3]              # Static list
+  items_from_step: previous_step_id          # Output from previous step
+  items_from_artifact: path/to/items.json    # Path to artifact file
+  item_var: story                            # Variable name (default: "item")
+  index_var: story_index                     # Index variable (default: "index")
+  max_iterations: 10                         # Optional limit
+```
+
+**Example: Multi-Story Development Workflow:**
+
+```yaml
+name: large_work_pipeline
+description: Break down large tasks into stories and implement each story
+steps:
+  - id: story_breakdown
+    agent: story_breakdown
+    prompt: src/agent_orchestrator/prompts/24_story_breakdown.md
+    needs: []
+    next_on_success: [story_implementation]
+
+  - id: story_implementation
+    agent: coding
+    prompt: src/agent_orchestrator/prompts/02_coding.md
+    needs: [story_breakdown]
+    loop:
+      items_from_step: story_breakdown
+      item_var: story
+      index_var: story_index
+    next_on_success: [story_review]
+
+  - id: story_review
+    agent: code_review
+    prompt: src/agent_orchestrator/prompts/06_code_review.md
+    needs: [story_implementation]
+    loop:
+      items_from_step: story_breakdown
+      item_var: story
+      index_var: story_index
+    loop_back_to: story_implementation
+    next_on_success: [final_docs]
+```
+
+**Accessing Loop Context in Agent Prompts:**
+
+Agents receive loop information through environment variables:
+- `LOOP_INDEX` - Current iteration index (0-based)
+- `LOOP_ITEM` - Current item being processed (JSON-encoded if complex)
+
+**Example Use Cases:**
+- Breaking large features into stories and implementing each story
+- Processing multiple issues from a backlog
+- Running tests across multiple configurations
+- Generating documentation for multiple modules
+
+**Loop Sources:**
+
+1. **Static list** (`items`): Define items directly in the workflow YAML
+2. **Previous step output** (`items_from_step`): Use output from a previous step that generates a list
+3. **Artifact file** (`items_from_artifact`): Read items from a JSON artifact file
+
+**Best Practices:**
+1. Use `max_iterations` to prevent runaway loops
+2. Combine loops with `loop_back_to` for iterative refinement per item
+3. Ensure the source step outputs a valid JSON array when using `items_from_step`
+4. Use descriptive variable names (`item_var`, `index_var`) for clarity in prompts
 
 #### Advanced Feature: Loop-Back for Iterative Refinement
 
@@ -698,6 +780,13 @@ steps:
     next_on_success: [successor_step_ids]
     gates: [optional_gate_conditions]
     human_in_the_loop: true/false
+    loop:  # optional - for iterating over collections
+      items: [...]                      # static list
+      items_from_step: step_id          # or reference to previous step
+      items_from_artifact: path         # or path to artifact file
+      item_var: item                    # variable name (default: "item")
+      index_var: index                  # index variable (default: "index")
+      max_iterations: 10                # optional limit
     metadata:
       key: value
 ```
@@ -705,21 +794,24 @@ steps:
 ## Project Layout
 
 - `src/agent_orchestrator/` — Main package code
-  - `orchestrator.py` — Core workflow execution engine
+  - `orchestrator.py` — Core workflow execution engine with loop control support
   - `runner.py` — Agent process management
   - `cli.py` — Command-line interface
-  - `models.py` — Data structures and contracts
+  - `models.py` — Data structures and contracts (includes LoopConfig)
   - `workflow.py` — Workflow loading and validation
   - `state.py` — Execution state persistence
   - `reporting.py` — Run report validation and parsing
   - `time_utils.py` — Timezone-aware timestamp helpers shared across the orchestrator
   - `gating.py` — Conditional workflow progression
   - `prompts/` — Standard agent prompt templates
+    - `24_story_breakdown.md` — Story decomposition for large tasks
+    - `25_story_detail_planner.md` — Detailed planning for individual stories
   - `wrappers/` — Agent execution adapters
   - `scripts/` — Utility scripts
     - `run_workflow.sh` — Convenience script for running workflows
 - `src/agent_orchestrator/workflows/workflow.yaml` — Complete SDLC pipeline definition
 - `src/agent_orchestrator/workflows/workflow_backlog_miner.yaml` — Architecture and tech debt analysis workflow
+- `src/agent_orchestrator/workflows/workflow_large_work.yaml` — Multi-story development with loop control
 - `requirements.txt` — Python dependencies
 - `README.md` — This comprehensive guide
 
