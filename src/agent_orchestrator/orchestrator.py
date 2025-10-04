@@ -282,6 +282,7 @@ class Orchestrator:
                         # Advance to next loop iteration
                         runtime.loop_index += 1
                         runtime.status = StepStatus.PENDING
+                        runtime.attempts = 0  # Reset attempts for the new iteration
                         runtime.report_path = None
                         runtime.started_at = None
                         runtime.ended_at = None
