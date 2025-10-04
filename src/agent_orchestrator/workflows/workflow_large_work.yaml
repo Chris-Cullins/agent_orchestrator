@@ -19,7 +19,7 @@ steps:
   # Step 3: Loop over each story and implement it
   - id: story_implementation
     agent: coding
-    prompt: src/agent_orchestrator/prompts/02_coding.md
+    prompt: src/agent_orchestrator/prompts/26_story_coding.md
     needs: [story_breakdown]
     loop:
       items_from_step: story_breakdown
