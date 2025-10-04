@@ -322,7 +322,8 @@ class Orchestrator:
 
     def _collect_dependency_artifacts(self, step: Step) -> Dict[str, str]:
         """Collect artifacts from dependency steps and return as environment variables."""
-        env = {}
+        env: Dict[str, str] = {}
+        issue_artifact: Optional[Path] = None
         for dep_id in step.needs:
             dep_runtime = self._state.steps.get(dep_id)
             if not dep_runtime or not dep_runtime.artifacts:
@@ -333,18 +334,34 @@ class Orchestrator:
                 # Convert artifact path to absolute path relative to repo
                 artifact_path = Path(artifact)
                 if not artifact_path.is_absolute():
-                    artifact_path = self._repo_dir / artifact_path
+                    artifact_path = (self._repo_dir / artifact_path).resolve()
+                else:
+                    artifact_path = artifact_path.resolve()
 
                 env_key = f"DEP_{dep_id.upper()}_ARTIFACT_{idx}"
                 env[env_key] = str(artifact_path)
 
+                if (
+                    issue_artifact is None
+                    and artifact_path.name.startswith("gh_issue_")
+                    and artifact_path.suffix == ".md"
+                ):
+                    issue_artifact = artifact_path
+
             # Also add a summary variable with all artifacts (comma-separated)
             if dep_runtime.artifacts:
                 artifact_paths = [
-                    str(self._repo_dir / Path(a)) if not Path(a).is_absolute() else str(a)
+                    str((self._repo_dir / Path(a)).resolve())
+                    if not Path(a).is_absolute()
+                    else str(Path(a).resolve())
                     for a in dep_runtime.artifacts
                 ]
                 env[f"DEP_{dep_id.upper()}_ARTIFACTS"] = ",".join(artifact_paths)
+
+        if issue_artifact:
+            env.setdefault("ISSUE_MARKDOWN_PATH", str(issue_artifact))
+            env.setdefault("ISSUE_MARKDOWN_DIR", str(issue_artifact.parent))
+            env.setdefault("ISSUE_MARKDOWN_FILENAME", issue_artifact.name)
 
         return env
 

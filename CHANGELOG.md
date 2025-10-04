@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `src/agent_orchestrator/scripts/install_systemd_timer.sh` to generate service/timer units and helper scripts with safe locking, log handling, and uninstall support
   - Documented CLI requirements, installer usage, and troubleshooting in README under "Automate Recurring Runs with systemd timers"
   - Added regression coverage in `tests/test_systemd_install_script.py` to verify unit generation, idempotency, and uninstall flows
+- Regression coverage for GitHub-issue artifact propagation
+  - Added `tests/test_issue_artifact_flow.py` to assert the runner injects `ISSUE_MARKDOWN_*` helpers and planners receive artifact paths from dependency env vars
 
 ### Fixed
 - Remove hardcoded macOS-specific PATH injection from wrapper modules to improve cross-platform compatibility
@@ -73,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Refreshed operator documentation (`README.md`, `AGENTS.md`, `sdlc_agents_orchestrator_guide.md`) to highlight `python -m agent_orchestrator.cli run`, wrapper binary overrides (`CODEX_EXEC_BIN` / `CLAUDE_CLI_BIN`), and the per-run `.agents/runs/<run_id>/` scaffolding (reports/logs/artifacts/manual_inputs/run_state.json) now guaranteed by the orchestrator.
 - Issue #20 traceability: README quick start, AGENTS Playbook, and the full orchestrator guide now clarify manual launch steps, resume expectations, and `.agents/runs/<run_id>/manual_inputs/` usage when `--pause-for-human-input` is set.
+- GitHub issue workflows now write `gh_issue_<ISSUE_NUMBER>.md` into the active run's artifacts directory, expose the path via new `ISSUE_MARKDOWN_*` env vars, and instruct downstream prompts/documentation to read from there while cleaning up legacy root-level files.
 
 ### Migration Guide
 If you have existing scripts or commands using the old wrapper references:

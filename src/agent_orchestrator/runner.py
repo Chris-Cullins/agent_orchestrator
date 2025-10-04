@@ -105,6 +105,15 @@ class StepRunner:
         if extra_env:
             env.update(extra_env)
 
+        issue_number = env.get("ISSUE_NUMBER")
+        artifacts_dir_value = env.get("ARTIFACTS_DIR")
+        if issue_number and artifacts_dir_value:
+            issue_filename = f"gh_issue_{issue_number}.md"
+            issue_path = Path(artifacts_dir_value) / issue_filename
+            env.setdefault("ISSUE_MARKDOWN_FILENAME", issue_filename)
+            env.setdefault("ISSUE_MARKDOWN_DIR", str(issue_path.parent))
+            env.setdefault("ISSUE_MARKDOWN_PATH", str(issue_path))
+
         process = subprocess.Popen(
             command,
             cwd=str(self._workdir),
@@ -122,4 +131,3 @@ class StepRunner:
             log_path=log_path,
             log_handle=log_file,
         )
-

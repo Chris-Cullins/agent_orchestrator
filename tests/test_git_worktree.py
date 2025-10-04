@@ -40,13 +40,13 @@ class GitWorktreeManagerTests(unittest.TestCase):
         self.assertTrue(handle.path.exists(), "worktree directory should exist")
         self.assertTrue(handle.branch.startswith("agents/run-"))
 
-        artifact_dir = handle.path / ".agents" / "run_reports"
+        artifact_dir = handle.path / ".agents" / "runs" / handle.run_id / "reports"
         artifact_dir.mkdir(parents=True, exist_ok=True)
         sample_report = artifact_dir / "report.json"
         sample_report.write_text("{}", encoding="utf-8")
 
         destination = persist_worktree_outputs(handle.path, manager.repo_root, handle.run_id)
-        copied_report = destination / "run_reports" / "report.json"
+        copied_report = destination / "reports" / "report.json"
         self.assertTrue(copied_report.exists(), "artifacts should be copied to primary repo")
 
         manager.remove(handle)
@@ -84,6 +84,7 @@ class GitWorktreeCleanupTests(unittest.TestCase):
                 start_at_step=None,
                 poll_interval=0.01,
                 max_attempts=1,
+                max_iterations=1,
                 pause_for_human_input=False,
             )
 
