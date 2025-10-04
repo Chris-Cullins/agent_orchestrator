@@ -31,7 +31,7 @@ steps:
   - id: story_review
     agent: code_review
     prompt: src/agent_orchestrator/prompts/06_code_review.md
-    needs: [story_implementation]
+    needs: [story_implementation, story_breakdown]
     loop:
       items_from_step: story_breakdown
       item_var: story
