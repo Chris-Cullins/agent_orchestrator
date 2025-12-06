@@ -53,20 +53,34 @@ def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, li
     )
     parser.add_argument(
         "--model",
-        default="opus",
-        help="Claude model to use (default: sonnet)",
+        default=None,
+        help="Claude model to use (default: opus, can be overridden by STEP_MODEL env var)",
     )
 
     return parser.parse_known_args(argv)
+
+
+def get_model(args: argparse.Namespace) -> str:
+    """Determine which model to use with priority: STEP_MODEL env > --model arg > default."""
+    # Priority 1: STEP_MODEL environment variable (set by orchestrator from workflow)
+    step_model = os.environ.get("STEP_MODEL")
+    if step_model:
+        return step_model
+    # Priority 2: --model command line argument
+    if args.model:
+        return args.model
+    # Priority 3: Default
+    return "opus"
 
 
 def build_claude_command(
     args: argparse.Namespace,
     forwarded: list[str],
     started_at: str,
+    model: str,
 ) -> tuple[list[str], str]:
     """Build the claude command and create the prompt content."""
-    
+
     # Read the prompt file
     prompt_path = Path(args.prompt)
     if not prompt_path.exists():
@@ -102,12 +116,12 @@ Your task instructions:
 
 Please proceed with the task and ensure you include the run report at the end.
 """
-    
+
     # Build the command - Claude uses -p for print mode (non-interactive)
     command = [
         args.claude_bin,
         "--print",  # Non-interactive output mode
-        "--model", args.model,  # Specify model
+        "--model", model,  # Specify model (resolved from env/arg/default)
         "--dangerously-skip-permissions",  # Skip permission checks for automation
         "--add-dir", args.repo,  # Allow access to repository directory
     ]
@@ -170,8 +184,11 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     started_at = utc_now()
 
+    # Resolve which model to use (priority: STEP_MODEL env > --model arg > default)
+    model = get_model(args)
+
     try:
-        command, enhanced_prompt = build_claude_command(args, forwarded, started_at)
+        command, enhanced_prompt = build_claude_command(args, forwarded, started_at, model)
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
@@ -192,7 +209,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     print(f"Running Claude CLI for agent '{args.agent}' in {cwd}")
     print(f"Command: {' '.join(command[:-1])} '[PROMPT]'")
-    print(f"Model: {args.model}")
+    print(f"Model: {model}")
 
     try:
         result = subprocess.run(

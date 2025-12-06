@@ -697,6 +697,96 @@ python -m agent_orchestrator.cli run \
 - Documentation quality check failing → loop back to docs update
 - Security scan finding vulnerabilities → loop back to code fixes
 
+#### Advanced Feature: Tiered Model Routing for Cost Optimization
+
+The orchestrator supports **per-step model selection**, allowing you to optimize costs by using different AI models for different tasks. This enables significant cost savings (50-80%) by routing simple tasks to cheaper models while reserving more capable models for complex reasoning.
+
+**How Tiered Model Routing Works:**
+
+1. Each step in a workflow can specify a `model` field
+2. The orchestrator passes the model to the wrapper via the `STEP_MODEL` environment variable
+3. Wrappers read this environment variable and use the specified model
+4. Steps without a model specified use the wrapper's default (opus for Claude)
+
+**Model Selection Guidelines:**
+
+| Model | Best For | Cost |
+|-------|----------|------|
+| `opus` | Complex architecture decisions, intricate debugging, security analysis | Highest |
+| `sonnet` | Code implementation, moderate reasoning, balanced tasks | Medium |
+| `haiku` | Simple checks, documentation, formatting, fast iterations | Lowest |
+
+**Example Workflow with Tiered Models:**
+
+```yaml
+name: cost_optimized_workflow
+description: Workflow using tiered models for cost efficiency
+steps:
+  - id: planning
+    agent: dev_architect
+    prompt: prompts/01_planning.md
+    model: opus  # Complex reasoning needs the most capable model
+    needs: []
+    next_on_success: [coding]
+
+  - id: coding
+    agent: coding
+    prompt: prompts/02_coding.md
+    model: sonnet  # Good balance of capability and cost
+    needs: [planning]
+    next_on_success: [code_review]
+
+  - id: code_review
+    agent: code_review
+    prompt: prompts/06_code_review.md
+    model: haiku  # Fast, simple checks - cost-effective
+    needs: [coding]
+    loop_back_to: coding
+    next_on_success: [docs]
+
+  - id: docs
+    agent: docs_updater
+    prompt: prompts/05_docs.md
+    model: haiku  # Simple task - most cost-effective
+    needs: [code_review]
+    next_on_success: []
+```
+
+**Model Resolution Priority:**
+
+The model is resolved in this order:
+1. `STEP_MODEL` environment variable (set by orchestrator from workflow)
+2. `--model` command line argument (wrapper argument)
+3. Default model (opus for Claude wrapper)
+
+**Combining with Wrapper Arguments:**
+
+You can set a default model for all steps and override specific ones in the workflow:
+
+```bash
+# Set default model to sonnet, but workflow can override per-step
+python -m agent_orchestrator.cli run \
+  --repo /path/to/repo \
+  --workflow workflow.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
+  --wrapper-arg --model \
+  --wrapper-arg sonnet
+```
+
+**Cost Optimization Best Practices:**
+
+1. **Planning & Architecture** → `opus` (complex reasoning required)
+2. **Code Implementation** → `sonnet` (good balance)
+3. **Code Review** → `haiku` or `sonnet` (depends on complexity)
+4. **Documentation** → `haiku` (straightforward generation)
+5. **Cleanup & Formatting** → `haiku` (simple tasks)
+6. **Security Analysis** → `opus` (critical reasoning)
+
+**Potential Savings:**
+- Using `haiku` for simple tasks can reduce costs by 80-90% compared to `opus`
+- A typical workflow with tiered models can save 50-70% overall
+- Review `workflow_code_review_loop.yaml` for a working example
+
 ### Step 9: Monitoring and Debugging
 
 #### View Execution Status
@@ -775,6 +865,7 @@ steps:
   - id: step_identifier
     agent: agent_name
     prompt: path/to/prompt.md
+    model: opus|sonnet|haiku           # optional - LLM model for this step
     needs: [prerequisite_step_ids]
     loop_back_to: optional_previous_step_id  # optional
     next_on_success: [successor_step_ids]

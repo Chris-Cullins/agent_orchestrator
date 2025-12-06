@@ -50,6 +50,7 @@ class Step:
     human_in_the_loop: bool = False
     metadata: Dict[str, str] = field(default_factory=dict)
     loop: Optional[LoopConfig] = None
+    model: Optional[str] = None  # LLM model to use for this step (e.g., "opus", "sonnet", "haiku")
 
 
 @dataclass
