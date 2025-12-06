@@ -949,7 +949,7 @@ Use `iteration_count` together with the per-run reports to understand how many t
 - `--max-attempts 3` - Retry failed steps up to 3 times
 - `--poll-interval 0.5` - Check for completion every 0.5 seconds
 - `--max-iterations 4` - Cap loop-back iterations before marking a step failed
-- `--schema path/to/schema.json` - Validate run reports against JSON schema
+- `--schema schemas/run_report.schema.json` - Validate run reports against the provided JSON Schema
 
 ### Troubleshooting
 
@@ -985,6 +985,54 @@ Each agent must:
 3. Produce artifacts in standardized locations
 4. Write a compliant run report to `${REPORT_PATH}`
 
+### Run Report Schema
+
+Run reports are JSON files that agents emit to signal completion. A formal JSON Schema is provided at `schemas/run_report.schema.json` (JSON Schema draft 2020-12) for validation and tooling integration.
+
+**Required fields:**
+- `schema`: Must be `"run_report@v0"`
+- `run_id`: Unique identifier for the orchestrator run
+- `step_id`: Identifier matching the workflow step
+- `agent`: Name of the executing agent
+- `status`: `"COMPLETED"` or `"FAILED"`
+- `started_at`: ISO 8601 UTC timestamp (e.g., `2025-09-30T12:00:00Z`)
+- `ended_at`: ISO 8601 UTC timestamp
+
+**Optional fields:**
+- `artifacts`: Array of relative file paths to produced artifacts
+- `metrics`: Object with key-value pairs (tokens, duration, etc.)
+- `logs`: Array of log message strings (must be concrete, not placeholders)
+- `next_suggested_steps`: Array of suggested follow-up actions
+- `gate_failure`: Boolean to trigger `loop_back_to` targets
+- `memory_updates`: Array of `MemoryUpdate` objects for AGENTS.md persistence
+
+**Optional schema validation:**
+
+While the orchestrator does not require schema validation at runtime (it uses placeholder detection and field presence checks), teams can validate run reports in CI pipelines or custom tooling:
+
+```bash
+# Using Python jsonschema library
+pip install jsonschema
+python -c "
+import json
+from jsonschema import validate
+schema = json.load(open('schemas/run_report.schema.json'))
+report = json.load(open('.agents/runs/<run_id>/reports/<report>.json'))
+validate(instance=report, schema=schema)
+print('Valid!')
+"
+
+# Using CLI validators like ajv-cli
+npm install -g ajv-cli
+ajv validate -s schemas/run_report.schema.json -d <report>.json
+```
+
+This is useful for:
+- CI pipelines validating agent outputs
+- Custom tooling that consumes run reports
+- Debugging malformed reports
+- IDE autocompletion when authoring reports
+
 ### Workflow Definition Format
 
 ```yaml
@@ -1013,6 +1061,8 @@ steps:
 
 ## Project Layout
 
+- `schemas/` — JSON Schema definitions
+  - `run_report.schema.json` — Formal schema for run report validation (JSON Schema draft 2020-12)
 - `src/agent_orchestrator/` — Main package code
   - `orchestrator.py` — Core workflow execution engine with loop control support
   - `runner.py` — Agent process management

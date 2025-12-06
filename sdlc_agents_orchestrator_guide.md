@@ -65,9 +65,9 @@ Each run creates `<target-repo>/.agents/runs/<run_id>/` with `reports/`, `logs/`
 
 **Completion signal (required):**
 
-- Path: `<repo>/.agents/runs/<run_id>/reports/<run_id>__<step_id>.json`  
-- Schema: `schemas/run_report.schema.json`  
-- Required fields: `schema, run_id, step_id, agent, status, started_at, ended_at`  
+- Path: `<repo>/.agents/runs/<run_id>/reports/<run_id>__<step_id>.json`
+- Schema: `schemas/run_report.schema.json` (JSON Schema draft 2020-12)
+- Required fields: `schema, run_id, step_id, agent, status, started_at, ended_at`
 - `status`: `"COMPLETED"` or `"FAILED"`
 - `started_at` / `ended_at` must be timezone-aware ISO 8601 UTC strings—call `src/agent_orchestrator/time_utils.utc_now()` to stay compatible with Python 3.13+
 - Optional loop-back flag: set `"gate_failure": true` to trigger `loop_back_to` targets when a quality gate fails; leave it false or omit it to continue downstream steps.
@@ -80,6 +80,23 @@ RUN_REPORT_JSON>>>
 ```
 
 **Validation guardrails:** The orchestrator and bundled wrappers now reject run reports that keep placeholder artifact or log entries (for example, "<REPLACE ME>"). Always emit concrete artifact paths and log summaries before marking a step complete.
+
+**Optional schema validation:** The `schemas/run_report.schema.json` file provides a formal JSON Schema definition for run reports. While the orchestrator does not require schema validation at runtime (it relies on placeholder detection and field presence checks), teams can optionally validate run reports against the schema using standard JSON Schema validators:
+
+```bash
+# Example using Python jsonschema library
+pip install jsonschema
+python -c "
+import json
+from jsonschema import validate
+schema = json.load(open('schemas/run_report.schema.json'))
+report = json.load(open('<path-to-run-report>.json'))
+validate(instance=report, schema=schema)
+print('Valid!')
+"
+```
+
+This is useful for CI pipelines, custom tooling, or debugging malformed reports.
 
 **Recommended env to pass into agents:**
 - `RUN_ID`, `STEP_ID`, `REPO_DIR`, `REPORT_PATH`, `ARTIFACTS_DIR`
@@ -329,6 +346,8 @@ a report so the rest of the workflow can continue.
 
 ```
 agent_orchestrator/
+├── schemas/
+│   └── run_report.schema.json   # JSON Schema for run report validation
 ├── src/agent_orchestrator/
 │   ├── cli.py
 │   ├── orchestrator.py

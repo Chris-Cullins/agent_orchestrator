@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **JSON Schema for run reports** (Issue #16)
+  - Added `schemas/run_report.schema.json` defining the formal structure of run reports
+  - Schema uses JSON Schema draft 2020-12 and validates all required and optional fields
+  - Includes `MemoryUpdate` definition for memory_updates array items
+  - Documents optional validation flow in `sdlc_agents_orchestrator_guide.md`
+  - Schema is optional for orchestrator runtime but useful for CI pipelines and custom tooling
+
 - **Loop control structure for iterating over collections in workflows** (Issue #63)
   - Added `LoopConfig` model to define loop behavior with multiple item sources
   - Added `loop` field to Step model for configuring iteration over collections
