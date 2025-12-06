@@ -1,13 +1,19 @@
+import json
 import shutil
 import subprocess
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest import mock
 
 from agent_orchestrator.cli import run_from_args
-from agent_orchestrator.git_worktree import GitWorktreeManager, persist_worktree_outputs
+from agent_orchestrator.git_worktree import (
+    GitWorktreeManager,
+    persist_worktree_outputs,
+    consolidate_worktree_daily_stats,
+)
 
 
 class GitWorktreeManagerTests(unittest.TestCase):
@@ -131,6 +137,196 @@ class GitWorktreeCleanupTests(unittest.TestCase):
                 orchestrator_instance.run.assert_called_once()
                 persist_outputs.assert_called_once()
                 manager_instance.remove.assert_called_once_with(handle)
+
+
+class ConsolidateWorktreeDailyStatsTests(unittest.TestCase):
+    """Tests for consolidate_worktree_daily_stats function."""
+
+    def test_consolidate_worktree_stats_merges_into_main_repo(self) -> None:
+        """Test that worktree stats are correctly merged into main repo stats."""
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            main_repo = tmp_path / "main"
+            worktree = tmp_path / "worktree"
+
+            main_repo.mkdir()
+            worktree.mkdir()
+
+            # Create worktree daily stats
+            today = datetime.now(timezone.utc).date().isoformat()
+            wt_stats_dir = worktree / ".agents" / "daily_stats"
+            wt_stats_dir.mkdir(parents=True)
+
+            worktree_data = {
+                "date": today,
+                "total_runs": 1,
+                "completed_runs": 1,
+                "failed_runs": 0,
+                "total_steps": 2,
+                "completed_steps": 2,
+                "failed_steps": 0,
+                "total_input_tokens": 5000,
+                "total_output_tokens": 2000,
+                "total_cost_usd": 1.50,
+                "total_duration_ms": 10000,
+                "cost_by_model": {"opus": 1.50},
+                "tokens_by_model": {"opus": {"input": 5000, "output": 2000}},
+                "runs": {
+                    "run-wt-123": {
+                        "workflow_name": "worktree_workflow",
+                        "status": "COMPLETED",
+                        "total_cost_usd": 1.50,
+                        "steps_completed": 2,
+                        "steps_failed": 0,
+                    }
+                },
+                "steps": [
+                    {
+                        "run_id": "run-wt-123",
+                        "step_id": "step-1",
+                        "agent": "coding",
+                        "model": "opus",
+                        "input_tokens": 3000,
+                        "output_tokens": 1000,
+                        "cost_usd": 0.80,
+                        "duration_ms": 5000,
+                        "status": "COMPLETED",
+                        "timestamp": "2024-01-15T10:00:00Z",
+                    },
+                    {
+                        "run_id": "run-wt-123",
+                        "step_id": "step-2",
+                        "agent": "review",
+                        "model": "opus",
+                        "input_tokens": 2000,
+                        "output_tokens": 1000,
+                        "cost_usd": 0.70,
+                        "duration_ms": 5000,
+                        "status": "COMPLETED",
+                        "timestamp": "2024-01-15T10:01:00Z",
+                    },
+                ],
+            }
+            (wt_stats_dir / f"{today}.json").write_text(
+                json.dumps(worktree_data), encoding="utf-8"
+            )
+
+            # Consolidate into main repo
+            result = consolidate_worktree_daily_stats(worktree, main_repo)
+
+            self.assertTrue(result, "Should return True when stats are consolidated")
+
+            # Verify main repo has the stats
+            main_stats_file = main_repo / ".agents" / "daily_stats" / f"{today}.json"
+            self.assertTrue(main_stats_file.exists(), "Main repo should have stats file")
+
+            main_data = json.loads(main_stats_file.read_text())
+            self.assertEqual(main_data["total_runs"], 1)
+            self.assertIn("run-wt-123", main_data["runs"])
+            self.assertEqual(len(main_data["steps"]), 2)
+
+    def test_consolidate_returns_false_when_no_stats_dir(self) -> None:
+        """Test that consolidation returns False when worktree has no stats."""
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            main_repo = tmp_path / "main"
+            worktree = tmp_path / "worktree"
+
+            main_repo.mkdir()
+            worktree.mkdir()
+
+            # No stats dir in worktree
+            result = consolidate_worktree_daily_stats(worktree, main_repo)
+
+            self.assertFalse(result, "Should return False when no stats directory")
+
+    def test_consolidate_returns_false_when_no_today_stats(self) -> None:
+        """Test that consolidation returns False when no stats for today."""
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            main_repo = tmp_path / "main"
+            worktree = tmp_path / "worktree"
+
+            main_repo.mkdir()
+            worktree.mkdir()
+
+            # Create stats dir but with old stats file
+            wt_stats_dir = worktree / ".agents" / "daily_stats"
+            wt_stats_dir.mkdir(parents=True)
+            (wt_stats_dir / "2020-01-01.json").write_text("{}", encoding="utf-8")
+
+            result = consolidate_worktree_daily_stats(worktree, main_repo)
+
+            self.assertFalse(result, "Should return False when no stats for today")
+
+
+class PersistWorktreeOutputsWithStatsTests(unittest.TestCase):
+    """Tests for persist_worktree_outputs including stats consolidation."""
+
+    def test_persist_outputs_also_consolidates_stats(self) -> None:
+        """Test that persist_worktree_outputs consolidates daily stats."""
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            main_repo = tmp_path / "main"
+            worktree = tmp_path / "worktree"
+            run_id = "test-run-123"
+
+            main_repo.mkdir()
+            worktree.mkdir()
+
+            # Create run artifacts in worktree
+            run_dir = worktree / ".agents" / "runs" / run_id
+            run_dir.mkdir(parents=True)
+            (run_dir / "report.json").write_text("{}", encoding="utf-8")
+
+            # Create worktree daily stats
+            today = datetime.now(timezone.utc).date().isoformat()
+            wt_stats_dir = worktree / ".agents" / "daily_stats"
+            wt_stats_dir.mkdir(parents=True)
+
+            worktree_stats = {
+                "date": today,
+                "total_runs": 1,
+                "completed_runs": 1,
+                "runs": {
+                    run_id: {
+                        "workflow_name": "test",
+                        "status": "COMPLETED",
+                        "total_cost_usd": 0.50,
+                    }
+                },
+                "steps": [
+                    {
+                        "run_id": run_id,
+                        "step_id": "step-1",
+                        "agent": "test",
+                        "model": "opus",
+                        "input_tokens": 1000,
+                        "output_tokens": 500,
+                        "cost_usd": 0.50,
+                        "duration_ms": 1000,
+                        "status": "COMPLETED",
+                        "timestamp": "2024-01-15T10:00:00Z",
+                    }
+                ],
+            }
+            (wt_stats_dir / f"{today}.json").write_text(
+                json.dumps(worktree_stats), encoding="utf-8"
+            )
+
+            # Persist outputs
+            persist_worktree_outputs(worktree, main_repo, run_id)
+
+            # Verify run artifacts were copied
+            copied_report = main_repo / ".agents" / "runs" / run_id / "report.json"
+            self.assertTrue(copied_report.exists(), "Run artifacts should be copied")
+
+            # Verify stats were consolidated
+            main_stats_file = main_repo / ".agents" / "daily_stats" / f"{today}.json"
+            self.assertTrue(main_stats_file.exists(), "Stats should be consolidated")
+
+            main_data = json.loads(main_stats_file.read_text())
+            self.assertIn(run_id, main_data["runs"])
 
 
 if __name__ == "__main__":
