@@ -2,7 +2,7 @@ name: code_review_loop_workflow
 description: >
   Workflow demonstrating loop-back functionality where code review can send
   work back to coding for fixes until quality gates are met.
-  
+
   This workflow implements an iterative development cycle:
   1. Coding agent implements the feature
   2. Code review agent checks for P0/P1 issues
@@ -10,11 +10,19 @@ description: >
   4. Process repeats until code passes review or max iterations reached
   5. Once code passes, proceeds to testing and documentation
 
+  This workflow also demonstrates tiered model routing for cost optimization:
+  - Planning uses opus (complex reasoning required)
+  - Coding uses sonnet (good balance of capability and cost)
+  - Code review uses haiku (fast, simple checks)
+  - Testing uses sonnet (moderate complexity)
+  - Docs uses haiku (straightforward task)
+
 steps:
-  # Initial planning step
+  # Initial planning step - uses opus for complex architectural decisions
   - id: planning
     agent: dev_architect
     prompt: src/agent_orchestrator/prompts/01_planning.md
+    model: opus  # Complex reasoning needs the most capable model
     needs: []
     next_on_success: [coding]
 
@@ -23,6 +31,7 @@ steps:
   - id: coding
     agent: coding
     prompt: src/agent_orchestrator/prompts/02_coding.md
+    model: sonnet  # Good balance of capability and cost for coding
     needs: [planning]
     next_on_success: [code_review]
 
@@ -32,6 +41,7 @@ steps:
   - id: code_review
     agent: code_review
     prompt: src/agent_orchestrator/prompts/06_code_review.md
+    model: haiku  # Fast, simple checks - cost-effective for reviews
     needs: [coding]
     loop_back_to: coding  # Send back to coding if gate fails
     next_on_success: [testing]
@@ -40,6 +50,7 @@ steps:
   - id: testing
     agent: manual_testing
     prompt: src/agent_orchestrator/prompts/04_manual.md
+    model: sonnet  # Moderate complexity for test execution
     needs: [code_review]
     next_on_success: [docs]
 
@@ -47,6 +58,7 @@ steps:
   - id: docs
     agent: docs_updater
     prompt: src/agent_orchestrator/prompts/05_docs.md
+    model: haiku  # Simple task - most cost-effective option
     needs: [testing]
     next_on_success: []
 

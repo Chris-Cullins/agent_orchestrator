@@ -85,6 +85,7 @@ def load_workflow(path: Path) -> Workflow:
             human_in_the_loop=bool(raw_step.get("human_in_the_loop", False)),
             metadata=dict(raw_step.get("metadata", {})),
             loop=loop_config,
+            model=raw_step.get("model"),  # Optional model override for this step
         )
         steps[step_id] = step
 

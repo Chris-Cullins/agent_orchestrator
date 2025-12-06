@@ -51,8 +51,21 @@ def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, li
         default=None,
         help="Override working directory for codex exec (defaults to repo)",
     )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Model parameter (accepted for compatibility but not used by Codex)",
+    )
 
     return parser.parse_known_args(argv)
+
+
+def get_model(args: argparse.Namespace) -> Optional[str]:
+    """Get model from STEP_MODEL env or --model arg (for logging purposes)."""
+    step_model = os.environ.get("STEP_MODEL")
+    if step_model:
+        return step_model
+    return args.model
 
 
 def build_codex_command(
@@ -185,8 +198,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     cwd = args.working_dir or args.repo
     start_time = time.monotonic()
 
+    # Log model if specified (for visibility, even though Codex doesn't use it)
+    model = get_model(args)
+
     print(f"Running codex exec for agent '{args.agent}' in {cwd}")
     print(f"Command: {' '.join(command[:-1])} '[PROMPT]'")
+    if model:
+        print(f"Model specified: {model} (note: Codex uses its own model selection)")
 
     try:
         result = subprocess.run(

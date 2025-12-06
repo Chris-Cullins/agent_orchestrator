@@ -89,19 +89,21 @@ class StepRunner:
 
         env = os.environ.copy()
         env.update(self._default_env)
-        env.update(
-            {
-                "RUN_ID": run_id,
-                "STEP_ID": step.id,
-                "AGENT_ID": step.agent,
-                "REPO_DIR": str(self._repo_dir),
-                "PROMPT_PATH": str(prompt_path),
-                "REPORT_PATH": str(report_path),
-                "MANUAL_RESULT_PATH": str(manual_input_path) if manual_input_path else "",
-                "STEP_ATTEMPT": str(attempt),
-                "ARTIFACTS_DIR": str(artifacts_dir) if artifacts_dir else str(self._repo_dir / ".agents" / "artifacts"),
-            }
-        )
+        step_env = {
+            "RUN_ID": run_id,
+            "STEP_ID": step.id,
+            "AGENT_ID": step.agent,
+            "REPO_DIR": str(self._repo_dir),
+            "PROMPT_PATH": str(prompt_path),
+            "REPORT_PATH": str(report_path),
+            "MANUAL_RESULT_PATH": str(manual_input_path) if manual_input_path else "",
+            "STEP_ATTEMPT": str(attempt),
+            "ARTIFACTS_DIR": str(artifacts_dir) if artifacts_dir else str(self._repo_dir / ".agents" / "artifacts"),
+        }
+        # Add model to environment if specified in the step
+        if step.model:
+            step_env["STEP_MODEL"] = step.model
+        env.update(step_env)
         if extra_env:
             env.update(extra_env)
 
