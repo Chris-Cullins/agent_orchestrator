@@ -446,6 +446,135 @@ You can override any of these standard prompts:
 - `08_cleanup.md` - Cleanup tasks
 - And more in `src/agent_orchestrator/prompts/`
 
+### Step 6.5: Architectural Guidance Documents
+
+For large projects (especially enterprise rewrites), you often have architectural decisions that all agents must follow—database naming conventions, API patterns, repository structure, etc. The **Guidance System** provides a lightweight way to enforce these constraints without bloating every agent prompt.
+
+#### How Architectural Guidance Works
+
+Unlike AGENTS.md files (which store learned "gotchas"), guidance documents are **prescriptive constraints** authored upfront by your team. Agents see a lookup table pointing them to relevant docs, and read them on-demand when their task involves that domain.
+
+#### Setting Up Guidance Documents
+
+Create guidance documents in your target repository:
+
+```bash
+# Create the guidance directory
+mkdir -p .agents/guidance
+
+# Create a database design guide
+cat > .agents/guidance/DATABASE.md << 'EOF'
+---
+title: Database Design
+description: Schema design decisions and naming conventions
+consult_when:
+  - creating or modifying database tables
+  - writing migrations
+  - adding new columns or relationships
+---
+# Database Design Guide
+
+## Naming Conventions
+
+### Tables
+- Use `snake_case` for table names
+- Use plural nouns (e.g., `users`, `orders`)
+
+### Columns
+- Primary keys: always `id` (integer, auto-increment)
+- Foreign keys: `{table_singular}_id` (e.g., `user_id`)
+- Timestamps: `created_at`, `updated_at` (always include both)
+
+## Required Columns
+
+Every table MUST have:
+- `id` - Primary key
+- `created_at` - Timestamp of creation
+- `updated_at` - Timestamp of last update
+EOF
+```
+
+#### Frontmatter Format
+
+Each guidance document uses YAML frontmatter to specify when agents should consult it:
+
+```yaml
+---
+title: API Design                           # Human-readable title
+description: REST API patterns and conventions
+consult_when:                               # Action-oriented triggers
+  - adding new API endpoints
+  - modifying request/response formats
+  - implementing authentication/authorization
+---
+# API Design Guide
+...
+```
+
+The `consult_when` entries should be **action-oriented** and specific:
+
+```yaml
+# Good - clear triggers
+consult_when:
+  - creating or modifying database tables
+  - writing SQL migrations
+  - adding foreign key relationships
+
+# Bad - too vague
+consult_when:
+  - database stuff
+  - when working with data
+```
+
+#### What Agents See
+
+When agents run, they receive a compact lookup table (not the full docs):
+
+```markdown
+## Architectural Guidance
+
+This repository has architectural guidance documents you MUST consult
+before making certain changes.
+
+**Location**: `.agents/guidance`
+
+| Document | Consult When |
+|----------|--------------|
+| DATABASE.md | creating or modifying database tables; writing migrations |
+| API.md | adding new API endpoints; modifying request/response formats |
+| REPO_LAYOUT.md | creating new files or modules; restructuring code |
+
+**IMPORTANT**: Before implementing changes in these areas, READ the
+relevant doc first and follow its constraints.
+```
+
+Agents then read the full document when their task matches a `consult_when` rule.
+
+#### Example Guidance Documents
+
+Common guidance documents for enterprise projects:
+
+| Document | Purpose |
+|----------|---------|
+| `DATABASE.md` | Schema design, naming conventions, migration patterns |
+| `API.md` | REST/GraphQL patterns, versioning, error formats |
+| `REPO_LAYOUT.md` | Where files go, module structure, naming conventions |
+| `CODING_STANDARDS.md` | Language-specific patterns, error handling, testing |
+| `SECURITY.md` | Authentication patterns, input validation, secrets handling |
+
+#### Differences from AGENTS.md
+
+| Feature | AGENTS.md | Guidance Docs |
+|---------|-----------|---------------|
+| **Purpose** | Learned gotchas | Prescriptive constraints |
+| **Author** | Agents (auto-generated) | Humans (upfront) |
+| **Size** | 30 lines max | Unlimited |
+| **Quality gates** | Strict (rejects low-value) | None |
+| **Injection** | Full content | Lookup table only |
+| **Location** | Throughout repo | `.agents/guidance/` only |
+
+Both systems work together: Guidance docs provide architectural constraints, while AGENTS.md captures lessons learned during development.
+
 ### Step 7: Advanced Configuration
 
 #### Human-in-the-Loop Integration
@@ -894,6 +1023,8 @@ steps:
   - `reporting.py` — Run report validation and parsing
   - `time_utils.py` — Timezone-aware timestamp helpers shared across the orchestrator
   - `gating.py` — Conditional workflow progression
+  - `memory.py` — Persistent agent memory via AGENTS.md files
+  - `guidance.py` — Architectural guidance document system
   - `prompts/` — Standard agent prompt templates
     - `24_story_breakdown.md` — Story decomposition for large tasks
     - `25_story_detail_planner.md` — Detailed planning for individual stories
