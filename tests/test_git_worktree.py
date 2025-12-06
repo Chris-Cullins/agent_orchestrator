@@ -86,6 +86,8 @@ class GitWorktreeCleanupTests(unittest.TestCase):
                 max_attempts=1,
                 max_iterations=1,
                 pause_for_human_input=False,
+                daily_cost_limit=None,
+                cost_limit_action="warn",
             )
 
             handle = SimpleNamespace(

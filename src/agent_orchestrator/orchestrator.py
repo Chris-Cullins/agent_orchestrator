@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .daily_stats import DailyStatsTracker
 from .gating import AlwaysOpenGateEvaluator, CompositeGateEvaluator, GateEvaluator
 from .memory import MemoryManager
 from .models import RunState, Step, StepRuntime, StepStatus, Workflow, utc_now
@@ -40,6 +41,8 @@ class Orchestrator:
         run_id: Optional[str] = None,
         start_at_step: Optional[str] = None,
         notification_service: Optional[NotificationService] = None,
+        daily_cost_limit: Optional[float] = None,
+        cost_limit_action: str = "warn",  # "warn", "pause", "fail"
     ) -> None:
         self._workflow = workflow
         self._workflow_root = workflow_root
@@ -58,6 +61,12 @@ class Orchestrator:
         self._pause_for_human = pause_for_human_input
         self._log = logger or logging.getLogger(__name__)
         self._notifications: NotificationService = notification_service or NullNotificationService()
+
+        # Daily cost tracking
+        self._daily_cost_limit = daily_cost_limit
+        self._cost_limit_action = cost_limit_action
+        self._daily_stats = DailyStatsTracker(repo_dir, logger=self._log)
+        self._cost_limit_reached = False
 
         # Try to load existing state if resuming
         existing_state = state_persister.load() if start_at_step else None
@@ -118,10 +127,36 @@ class Orchestrator:
             self._state.run_id,
             self._repo_dir,
         )
+
+        # Check daily cost limit before starting
+        if self._daily_cost_limit:
+            within_limit, current_cost, limit = self._daily_stats.check_daily_limit(
+                self._daily_cost_limit
+            )
+            if not within_limit:
+                self._log.warning(
+                    "Daily cost limit already exceeded: $%.2f >= $%.2f",
+                    current_cost,
+                    limit,
+                )
+                if self._cost_limit_action == "fail":
+                    raise RuntimeError(
+                        f"Daily cost limit exceeded: ${current_cost:.2f} >= ${limit:.2f}"
+                    )
+
+        # Record run start in daily stats
+        self._daily_stats.record_run_start(self._state.run_id, self._workflow.name)
+
         self._start_notifications()
+        run_status = "COMPLETED"
         try:
             while True:
                 progress = False
+
+                # Check cost limit before launching more steps
+                if self._check_cost_limit_reached():
+                    break
+
                 progress |= self._launch_ready_steps()
                 progress |= self._collect_reports()
                 progress |= self._check_manual_steps()
@@ -133,13 +168,21 @@ class Orchestrator:
                     break
                 if self._has_terminal_failure():
                     self._log.error("workflow failed run_id=%s", self._state.run_id)
+                    run_status = "FAILED"
                     break
                 if not progress:
                     time.sleep(self._poll_interval)
+        except Exception:
+            run_status = "FAILED"
+            raise
         finally:
             self._cleanup_processes()
             self._persist_state()
             self._stop_notifications()
+            # Record run end in daily stats
+            self._daily_stats.record_run_end(self._state.run_id, run_status)
+            # Log daily summary
+            self._log_daily_summary()
 
     def _launch_ready_steps(self) -> bool:
         launched = False
@@ -824,6 +867,71 @@ class Orchestrator:
             runtime.notified_human_input = True
         except Exception:  # pragma: no cover - defensive logging
             self._log.exception("failed to dispatch human-input notification step=%s", step_id)
+
+    def _check_cost_limit_reached(self) -> bool:
+        """Check if daily cost limit has been reached and handle accordingly."""
+        if not self._daily_cost_limit or self._cost_limit_reached:
+            return self._cost_limit_reached
+
+        within_limit, current_cost, limit = self._daily_stats.check_daily_limit(
+            self._daily_cost_limit
+        )
+
+        if not within_limit:
+            self._log.warning(
+                "Daily cost limit reached: $%.2f >= $%.2f (action=%s)",
+                current_cost,
+                limit,
+                self._cost_limit_action,
+            )
+
+            if self._cost_limit_action == "fail":
+                self._cost_limit_reached = True
+                # Mark all pending steps as failed
+                for step_id, runtime in self._state.steps.items():
+                    if runtime.status == StepStatus.PENDING:
+                        runtime.status = StepStatus.FAILED
+                        runtime.last_error = f"Daily cost limit exceeded: ${current_cost:.2f}"
+                return True
+
+            elif self._cost_limit_action == "pause":
+                self._cost_limit_reached = True
+                # Notify about cost limit
+                self._notify_cost_limit(current_cost, limit)
+                return True
+
+            elif self._cost_limit_action == "warn":
+                # Just log warning, continue execution
+                pass
+
+        return False
+
+    def _notify_cost_limit(self, current_cost: float, limit: float) -> None:
+        """Send notification about cost limit being reached."""
+        try:
+            # Use existing notification infrastructure
+            self._log.info(
+                "Daily cost limit notification: $%.2f / $%.2f",
+                current_cost,
+                limit,
+            )
+            # TODO: Add dedicated cost limit notification type
+        except Exception:  # pragma: no cover
+            self._log.exception("failed to send cost limit notification")
+
+    def _log_daily_summary(self) -> None:
+        """Log a summary of daily statistics."""
+        try:
+            stats = self._daily_stats.get_daily_stats()
+            self._log.info(
+                "Daily stats: runs=%d steps=%d cost=$%.4f tokens=%d",
+                stats.total_runs,
+                stats.total_steps,
+                stats.total_cost_usd,
+                stats.total_input_tokens + stats.total_output_tokens,
+            )
+        except Exception:  # pragma: no cover
+            self._log.exception("failed to log daily summary")
 
 
 def build_default_runner(
