@@ -226,6 +226,81 @@ class TestDailyStatsTracker:
         assert data["date"] == today
 
 
+class TestDailyStatsTrackerActualCost:
+    """Tests for actual cost tracking from Claude CLI."""
+
+    def test_actual_cost_used_when_provided(self, tmp_path):
+        """When actual_cost_usd is provided, it should be used instead of calculated cost."""
+        tracker = DailyStatsTracker(tmp_path)
+
+        # Record with actual cost from Claude CLI
+        cost = tracker.record_step(
+            run_id="run-123",
+            step_id="step-1",
+            agent="coding",
+            model="opus",
+            input_tokens=1000,
+            output_tokens=500,
+            duration_ms=5000,
+            status="COMPLETED",
+            actual_cost_usd=0.50,  # Actual cost from Claude CLI
+        )
+
+        # Should return the actual cost, not calculated
+        assert cost == 0.50
+
+        stats = tracker.get_daily_stats()
+        assert stats.total_cost_usd == 0.50
+        # Check step record has cost_source
+        assert stats.steps[0]["cost_source"] == "actual"
+
+    def test_calculated_cost_when_no_actual(self, tmp_path):
+        """When actual_cost_usd is None, cost should be calculated."""
+        tracker = DailyStatsTracker(tmp_path)
+
+        cost = tracker.record_step(
+            run_id="run-123",
+            step_id="step-1",
+            agent="coding",
+            model="haiku",
+            input_tokens=1000,
+            output_tokens=500,
+            duration_ms=5000,
+            status="COMPLETED",
+            actual_cost_usd=None,  # No actual cost, use calculated
+        )
+
+        # Should be calculated cost
+        expected = calculate_cost(1000, 500, "haiku")
+        assert cost == expected
+
+        stats = tracker.get_daily_stats()
+        assert stats.steps[0]["cost_source"] == "estimated"
+
+    def test_cache_tokens_recorded(self, tmp_path):
+        """Cache tokens should be recorded in step details."""
+        tracker = DailyStatsTracker(tmp_path)
+
+        tracker.record_step(
+            run_id="run-123",
+            step_id="step-1",
+            agent="coding",
+            model="opus",
+            input_tokens=100,
+            output_tokens=50,
+            duration_ms=5000,
+            status="COMPLETED",
+            actual_cost_usd=0.75,
+            cache_creation_input_tokens=15000,
+            cache_read_input_tokens=5000,
+        )
+
+        stats = tracker.get_daily_stats()
+        step = stats.steps[0]
+        assert step["cache_creation_input_tokens"] == 15000
+        assert step["cache_read_input_tokens"] == 5000
+
+
 class TestDailyStatsTrackerFailedSteps:
     """Tests for tracking failed steps."""
 

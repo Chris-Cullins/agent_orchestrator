@@ -55,6 +55,38 @@ python -m agent_orchestrator.cli stats --repo /path/to/repo --date 2024-01-15
 
 ---
 
+### 3. Accurate Cost Tracking (Claude CLI) ✅
+**Status:** Implemented
+
+Uses Claude CLI's stream-json verbose output to get actual token counts and costs.
+
+**Implementation:**
+- Claude CLI outputs `--output-format stream-json --verbose` which includes actual token usage
+- Parses the `result` JSON line for `total_cost_usd` and `usage` data
+- Tracks cache tokens (creation and read) for accurate cost attribution
+- Falls back to estimation if Claude CLI data unavailable
+
+**What's tracked:**
+```json
+{
+  "input_tokens": 4,
+  "output_tokens": 134,
+  "cache_creation_input_tokens": 15000,
+  "cache_read_input_tokens": 47000,
+  "cost_usd": 0.6076,
+  "cost_source": "actual"
+}
+```
+
+**Benefits:**
+- Accurate cost reporting (previously estimates were 5-10x lower)
+- Cache token visibility for optimization
+- Trust but verify with `cost_source` field
+
+**Savings:** Accurate visibility enables informed optimization decisions
+
+---
+
 ## High-Impact (Recommended Next)
 
 ### 2. Diff-Only Context
@@ -379,6 +411,7 @@ steps:
 | **P0** | ~~Tiered Model Routing~~ | ✅ Done | 50-80% |
 | **P0** | ~~Token Tracking~~ | ✅ Done | Visibility |
 | **P0** | ~~Cost Guardrails~~ | ✅ Done | Protection |
+| **P0** | ~~Accurate Cost Tracking~~ | ✅ Done | Visibility |
 | **P1** | Diff-Only Context | Medium | 60-90% |
 | **P1** | Pre-Flight Validation | Medium | 20-40% |
 | **P1** | Result Caching | Medium | 30-50% |
@@ -397,6 +430,8 @@ steps:
 - [x] Add token counting to run reports
 - [x] Add `--daily-cost-limit` CLI flag
 - [x] Add daily stats tracking and `stats` command
+- [x] Accurate cost tracking via Claude CLI stream-json output
+- [x] Cache token tracking (creation/read)
 - [ ] Add `type: local_script` step support
 - [ ] Implement response caching with TTL
 - [ ] Add `--model` default in workflow-level config

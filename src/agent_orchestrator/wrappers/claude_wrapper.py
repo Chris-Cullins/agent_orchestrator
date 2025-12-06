@@ -126,12 +126,14 @@ Please proceed with the task and ensure you include the run report at the end.
         "--model", model,  # Specify model (resolved from env/arg/default)
         "--dangerously-skip-permissions",  # Skip permission checks for automation
         "--add-dir", args.repo,  # Allow access to repository directory
+        "--output-format", "stream-json",  # Get JSON output for token parsing
+        "--verbose",  # Required for stream-json to include token/cost data
     ]
-    
+
     # Add any forwarded arguments
     if forwarded:
         command.extend(forwarded)
-    
+
     return command, enhanced_prompt
 
 
@@ -150,17 +152,63 @@ def extract_run_report(text: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def extract_token_usage(stdout: str, stderr: str) -> Dict[str, int]:
+def extract_stream_json_result(stdout: str) -> Optional[Dict[str, Any]]:
+    """
+    Extract the result object from Claude CLI stream-json verbose output.
+
+    When running with --output-format stream-json --verbose, Claude CLI outputs
+    JSONL with a final "result" line containing actual token counts and cost:
+
+    {"type":"result","total_cost_usd":0.123,"usage":{"input_tokens":100,...}}
+
+    Returns the parsed result dict or None if not found.
+    """
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+            if data.get("type") == "result":
+                return data
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def extract_token_usage(stdout: str, stderr: str) -> Dict[str, Any]:
     """
     Extract token usage from Claude CLI output.
 
-    Claude CLI may output token usage in various formats. This function
-    attempts to parse common patterns.
+    First tries to parse stream-json verbose output for accurate data.
+    Falls back to pattern matching for legacy output formats.
 
-    Returns dict with 'input_tokens' and 'output_tokens' keys.
+    Returns dict with 'input_tokens', 'output_tokens', and optionally
+    'cache_creation_input_tokens', 'cache_read_input_tokens', 'cost_usd'.
     """
+    result: Dict[str, Any] = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cost_usd": None,
+    }
+
+    # Try to get accurate data from stream-json verbose output
+    stream_result = extract_stream_json_result(stdout)
+    if stream_result:
+        usage = stream_result.get("usage", {})
+        result["input_tokens"] = usage.get("input_tokens", 0)
+        result["output_tokens"] = usage.get("output_tokens", 0)
+        result["cache_creation_input_tokens"] = usage.get("cache_creation_input_tokens", 0)
+        result["cache_read_input_tokens"] = usage.get("cache_read_input_tokens", 0)
+        # Claude CLI provides pre-calculated cost
+        if "total_cost_usd" in stream_result:
+            result["cost_usd"] = stream_result["total_cost_usd"]
+        return result
+
+    # Fallback: pattern matching for legacy/text output
     combined = stdout + "\n" + stderr
-    result = {"input_tokens": 0, "output_tokens": 0}
 
     # Pattern 1: "Input tokens: 1234" / "Output tokens: 5678"
     input_match = re.search(r"[Ii]nput\s*tokens?[:\s]+(\d+)", combined)
@@ -194,12 +242,6 @@ def extract_token_usage(stdout: str, stderr: str) -> Dict[str, int]:
             total = int(total_match.group(1))
             result["input_tokens"] = int(total * 0.6)
             result["output_tokens"] = int(total * 0.4)
-
-    # Fallback: Estimate based on prompt/response length if no token info found
-    # (rough estimate: ~4 chars per token for English text)
-    if result["input_tokens"] == 0 and result["output_tokens"] == 0:
-        # We'll estimate in the main function where we have access to the prompt
-        pass
 
     return result
 
@@ -306,7 +348,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if result.stderr:
         sys.stderr.write(result.stderr)
 
-    # Extract token usage from output
+    # Extract token usage from output (includes actual cost if available)
     token_usage = extract_token_usage(result.stdout or "", result.stderr or "")
 
     # If no tokens found in output, estimate from prompt/response length
@@ -315,12 +357,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     if token_usage["output_tokens"] == 0 and result.stdout:
         token_usage["output_tokens"] = estimate_tokens_from_text(result.stdout)
 
-    # Calculate cost
-    step_cost = calculate_cost(
-        token_usage["input_tokens"],
-        token_usage["output_tokens"],
-        model,
-    )
+    # Use actual cost from Claude CLI if available, otherwise calculate
+    if token_usage.get("cost_usd") is not None:
+        step_cost = token_usage["cost_usd"]
+    else:
+        step_cost = calculate_cost(
+            token_usage["input_tokens"],
+            token_usage["output_tokens"],
+            model,
+        )
 
     # Try to extract run report from output
     report_payload = extract_run_report(result.stdout or "")
@@ -371,8 +416,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     # Add token and cost metrics
     metrics["input_tokens"] = token_usage["input_tokens"]
     metrics["output_tokens"] = token_usage["output_tokens"]
-    metrics["total_tokens"] = token_usage["input_tokens"] + token_usage["output_tokens"]
+    metrics["cache_creation_input_tokens"] = token_usage.get("cache_creation_input_tokens", 0)
+    metrics["cache_read_input_tokens"] = token_usage.get("cache_read_input_tokens", 0)
+    total_tokens = (
+        token_usage["input_tokens"]
+        + token_usage["output_tokens"]
+        + token_usage.get("cache_creation_input_tokens", 0)
+        + token_usage.get("cache_read_input_tokens", 0)
+    )
+    metrics["total_tokens"] = total_tokens
     metrics["cost_usd"] = round(step_cost, 6)
+    metrics["cost_source"] = "claude_cli" if token_usage.get("cost_usd") is not None else "estimated"
     metrics["model"] = model
     report_payload["status"] = str(report_payload.get("status", "COMPLETED")).upper()
 
@@ -390,8 +444,15 @@ def main(argv: Optional[list[str]] = None) -> int:
             duration_ms=duration_ms,
             status=report_payload["status"],
             workflow_name=os.environ.get("WORKFLOW_NAME", ""),
+            actual_cost_usd=token_usage.get("cost_usd"),
+            cache_creation_input_tokens=token_usage.get("cache_creation_input_tokens", 0),
+            cache_read_input_tokens=token_usage.get("cache_read_input_tokens", 0),
         )
-        print(f"Cost: ${step_cost:.4f} ({token_usage['input_tokens']} in / {token_usage['output_tokens']} out tokens)")
+        cost_source = "actual" if token_usage.get("cost_usd") is not None else "estimated"
+        cache_info = ""
+        if token_usage.get("cache_creation_input_tokens", 0) or token_usage.get("cache_read_input_tokens", 0):
+            cache_info = f", cache: {token_usage.get('cache_creation_input_tokens', 0)} created / {token_usage.get('cache_read_input_tokens', 0)} read"
+        print(f"Cost: ${step_cost:.4f} ({cost_source}) - tokens: {token_usage['input_tokens']} in / {token_usage['output_tokens']} out{cache_info}")
     except Exception as e:
         # Don't fail the step if stats tracking fails
         print(f"Warning: Failed to record daily stats: {e}", file=sys.stderr)

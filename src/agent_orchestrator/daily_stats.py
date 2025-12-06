@@ -171,14 +171,27 @@ class DailyStatsTracker:
         duration_ms: int,
         status: str,
         workflow_name: str = "",
+        actual_cost_usd: Optional[float] = None,
+        cache_creation_input_tokens: int = 0,
+        cache_read_input_tokens: int = 0,
     ) -> float:
         """
         Record a step execution and return the cost.
 
+        Args:
+            actual_cost_usd: If provided, use this cost instead of calculating.
+                             This is typically the cost reported by Claude CLI.
+            cache_creation_input_tokens: Tokens used for cache creation.
+            cache_read_input_tokens: Tokens read from cache.
+
         Returns the cost in USD for this step.
         """
         stats = self._load_stats()
-        cost = calculate_cost(input_tokens, output_tokens, model)
+        # Use actual cost if provided, otherwise calculate
+        if actual_cost_usd is not None:
+            cost = actual_cost_usd
+        else:
+            cost = calculate_cost(input_tokens, output_tokens, model)
 
         # Update totals
         stats.total_steps += 1
@@ -210,7 +223,10 @@ class DailyStatsTracker:
             "model": model,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
+            "cache_creation_input_tokens": cache_creation_input_tokens,
+            "cache_read_input_tokens": cache_read_input_tokens,
             "cost_usd": round(cost, 4),
+            "cost_source": "actual" if actual_cost_usd is not None else "estimated",
             "duration_ms": duration_ms,
             "status": status,
             "timestamp": utc_now(),
