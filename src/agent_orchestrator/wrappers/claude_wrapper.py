@@ -7,6 +7,7 @@ This adapts the orchestrator's expected interface to the real claude command.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -23,6 +24,7 @@ from agent_orchestrator.run_report_format import (
     build_memory_update_instructions,
     normalize_run_report_payload,
 )
+from agent_orchestrator.daily_stats import calculate_cost, DailyStatsTracker
 
 
 def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, list[str]]:
@@ -148,6 +150,65 @@ def extract_run_report(text: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def extract_token_usage(stdout: str, stderr: str) -> Dict[str, int]:
+    """
+    Extract token usage from Claude CLI output.
+
+    Claude CLI may output token usage in various formats. This function
+    attempts to parse common patterns.
+
+    Returns dict with 'input_tokens' and 'output_tokens' keys.
+    """
+    combined = stdout + "\n" + stderr
+    result = {"input_tokens": 0, "output_tokens": 0}
+
+    # Pattern 1: "Input tokens: 1234" / "Output tokens: 5678"
+    input_match = re.search(r"[Ii]nput\s*tokens?[:\s]+(\d+)", combined)
+    output_match = re.search(r"[Oo]utput\s*tokens?[:\s]+(\d+)", combined)
+
+    if input_match:
+        result["input_tokens"] = int(input_match.group(1))
+    if output_match:
+        result["output_tokens"] = int(output_match.group(1))
+
+    # Pattern 2: "tokens: 1234 in, 5678 out" or "1234 input / 5678 output"
+    if result["input_tokens"] == 0 and result["output_tokens"] == 0:
+        pattern = r"(\d+)\s*(?:in|input)[^0-9]*(\d+)\s*(?:out|output)"
+        match = re.search(pattern, combined, re.IGNORECASE)
+        if match:
+            result["input_tokens"] = int(match.group(1))
+            result["output_tokens"] = int(match.group(2))
+
+    # Pattern 3: JSON format {"input_tokens": 1234, "output_tokens": 5678}
+    if result["input_tokens"] == 0 and result["output_tokens"] == 0:
+        json_pattern = r'\{[^}]*"input_tokens"\s*:\s*(\d+)[^}]*"output_tokens"\s*:\s*(\d+)[^}]*\}'
+        match = re.search(json_pattern, combined)
+        if match:
+            result["input_tokens"] = int(match.group(1))
+            result["output_tokens"] = int(match.group(2))
+
+    # Pattern 4: Total tokens only - estimate split (60% input, 40% output)
+    if result["input_tokens"] == 0 and result["output_tokens"] == 0:
+        total_match = re.search(r"[Tt]otal\s*tokens?[:\s]+(\d+)", combined)
+        if total_match:
+            total = int(total_match.group(1))
+            result["input_tokens"] = int(total * 0.6)
+            result["output_tokens"] = int(total * 0.4)
+
+    # Fallback: Estimate based on prompt/response length if no token info found
+    # (rough estimate: ~4 chars per token for English text)
+    if result["input_tokens"] == 0 and result["output_tokens"] == 0:
+        # We'll estimate in the main function where we have access to the prompt
+        pass
+
+    return result
+
+
+def estimate_tokens_from_text(text: str) -> int:
+    """Rough estimate of token count from text length (~4 chars per token)."""
+    return max(1, len(text) // 4)
+
+
 def synthesize_report(
     run_id: str,
     step_id: str,
@@ -245,6 +306,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     if result.stderr:
         sys.stderr.write(result.stderr)
 
+    # Extract token usage from output
+    token_usage = extract_token_usage(result.stdout or "", result.stderr or "")
+
+    # If no tokens found in output, estimate from prompt/response length
+    if token_usage["input_tokens"] == 0:
+        token_usage["input_tokens"] = estimate_tokens_from_text(enhanced_prompt)
+    if token_usage["output_tokens"] == 0 and result.stdout:
+        token_usage["output_tokens"] = estimate_tokens_from_text(result.stdout)
+
+    # Calculate cost
+    step_cost = calculate_cost(
+        token_usage["input_tokens"],
+        token_usage["output_tokens"],
+        model,
+    )
+
     # Try to extract run report from output
     report_payload = extract_run_report(result.stdout or "")
     if report_payload is None:
@@ -291,7 +368,33 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     metrics = report_payload.setdefault("metrics", {})
     metrics.setdefault("duration_ms", duration_ms)
+    # Add token and cost metrics
+    metrics["input_tokens"] = token_usage["input_tokens"]
+    metrics["output_tokens"] = token_usage["output_tokens"]
+    metrics["total_tokens"] = token_usage["input_tokens"] + token_usage["output_tokens"]
+    metrics["cost_usd"] = round(step_cost, 6)
+    metrics["model"] = model
     report_payload["status"] = str(report_payload.get("status", "COMPLETED")).upper()
+
+    # Record to daily stats tracker
+    try:
+        repo_path = Path(args.repo)
+        tracker = DailyStatsTracker(repo_path)
+        tracker.record_step(
+            run_id=args.run_id,
+            step_id=args.step_id,
+            agent=args.agent,
+            model=model,
+            input_tokens=token_usage["input_tokens"],
+            output_tokens=token_usage["output_tokens"],
+            duration_ms=duration_ms,
+            status=report_payload["status"],
+            workflow_name=os.environ.get("WORKFLOW_NAME", ""),
+        )
+        print(f"Cost: ${step_cost:.4f} ({token_usage['input_tokens']} in / {token_usage['output_tokens']} out tokens)")
+    except Exception as e:
+        # Don't fail the step if stats tracking fails
+        print(f"Warning: Failed to record daily stats: {e}", file=sys.stderr)
 
     try:
         report_payload = normalize_run_report_payload(report_payload)

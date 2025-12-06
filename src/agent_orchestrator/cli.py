@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import shutil
+from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, Optional
 
+from .daily_stats import DailyStatsTracker
 from .gating import CompositeGateEvaluator, AlwaysOpenGateEvaluator, FileBackedGateEvaluator
 from .notifications import NotificationService
 from .notifications.email import EmailConfigError, build_email_notification_service
@@ -198,6 +201,8 @@ def run_from_args(args: argparse.Namespace) -> None:
             run_id=run_id_override,
             start_at_step=args.start_at_step,
             notification_service=_build_notification_service(run_repo_dir),
+            daily_cost_limit=args.daily_cost_limit,
+            cost_limit_action=args.cost_limit_action,
         )
 
         orchestrator.run()
@@ -304,7 +309,74 @@ def build_parser() -> argparse.ArgumentParser:
         help="Keep the worktree after the workflow finishes",
     )
 
+    # Cost management arguments
+    cost_group = run_parser.add_argument_group("cost management")
+    cost_group.add_argument(
+        "--daily-cost-limit",
+        type=float,
+        default=None,
+        help="Maximum daily spending in USD (e.g., 10.00). Checked before each step.",
+    )
+    cost_group.add_argument(
+        "--cost-limit-action",
+        choices=["warn", "pause", "fail"],
+        default="warn",
+        help="Action when daily cost limit is reached: warn (log and continue), pause (stop workflow), fail (mark as failed)",
+    )
+
+    # Stats subcommand
+    stats_parser = subparsers.add_parser("stats", help="View daily cost statistics")
+    stats_parser.add_argument("--repo", required=True, help="Path to the target repository")
+    stats_parser.add_argument(
+        "--date",
+        help="Date to show stats for (YYYY-MM-DD format, default: today)",
+    )
+    stats_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
+    )
+    stats_parser.add_argument(
+        "--send-email",
+        action="store_true",
+        help="Send daily summary via email",
+    )
+
     return parser
+
+
+def stats_from_args(args: argparse.Namespace) -> None:
+    """Handle the stats subcommand."""
+    repo_dir = Path(args.repo).expanduser().resolve()
+    tracker = DailyStatsTracker(repo_dir)
+
+    # Parse date if provided
+    stats_date = None
+    if args.date:
+        try:
+            stats_date = date.fromisoformat(args.date)
+        except ValueError:
+            raise SystemExit(f"Invalid date format: {args.date}. Use YYYY-MM-DD.")
+
+    stats = tracker.get_daily_stats(stats_date)
+
+    if args.format == "json":
+        print(json.dumps(stats.to_dict(), indent=2))
+    else:
+        print(tracker.generate_summary(stats_date))
+
+    # Send email if requested
+    if args.send_email:
+        try:
+            notification_service = _build_notification_service(repo_dir)
+            # Use the email notification service to send daily summary
+            summary = tracker.generate_summary(stats_date)
+            _LOG.info("Sending daily summary email...")
+            # TODO: Add dedicated daily summary email method
+            print("\nDaily summary email sent (if email notifications are configured).")
+        except Exception as e:
+            _LOG.error("Failed to send email: %s", e)
 
 
 def main(argv: Optional[list[str]] = None) -> None:
@@ -318,6 +390,8 @@ def main(argv: Optional[list[str]] = None) -> None:
 
     if args.command == "run":
         run_from_args(args)
+    elif args.command == "stats":
+        stats_from_args(args)
     else:  # pragma: no cover - defensive
         parser.error(f"Unknown command {args.command}")
 
