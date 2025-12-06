@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from agent_orchestrator.memory import MemoryManager
+from agent_orchestrator.guidance import GuidanceManager
 from agent_orchestrator.time_utils import utc_now
 from agent_orchestrator.run_report_format import (
     RUN_REPORT_END,
@@ -121,12 +122,19 @@ def build_claude_command(
     memory_context = memory_manager.read_memories(repo_path)
     memory_section = memory_context.to_prompt_section()
 
+    # Read architectural guidance (if present)
+    guidance_manager = GuidanceManager(repo_dir=repo_path)
+    guidance_context = guidance_manager.read_all_guidance()
+    guidance_section = guidance_context.to_prompt_section()
+
     # Enhance the prompt with context about the task
     enhanced_prompt = f"""You are an AI agent named "{args.agent}" working on a software development task.
 
 Repository: {args.repo}
 Run ID: {args.run_id}
 Step ID: {args.step_id}
+
+{guidance_section}
 
 {memory_section}
 
