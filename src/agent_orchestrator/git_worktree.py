@@ -14,6 +14,7 @@ __all__ = [
     "GitWorktreeHandle",
     "GitWorktreeManager",
     "persist_worktree_outputs",
+    "consolidate_worktree_daily_stats",
 ]
 
 
@@ -165,14 +166,86 @@ class GitWorktreeManager:
             raise GitWorktreeError(f"git {' '.join(args)} failed: {details}") from exc
 
 
+def consolidate_worktree_daily_stats(
+    worktree_path: Path,
+    repo_root: Path,
+    logger: Optional[logging.Logger] = None,
+) -> bool:
+    """
+    Consolidate daily stats from a worktree into the main repository.
+
+    This ensures that costs incurred in worktree runs are reflected in
+    the main repository's daily totals for accurate --daily-cost-limit tracking.
+
+    Args:
+        worktree_path: Path to the worktree directory.
+        repo_root: Path to the main repository root.
+        logger: Optional logger for debug/info messages.
+
+    Returns:
+        True if stats were consolidated, False if no stats found.
+    """
+    log = logger or logging.getLogger(__name__)
+
+    # Import here to avoid circular imports
+    from .daily_stats import DailyStats, DailyStatsTracker
+    import json
+    from datetime import datetime, timezone
+
+    worktree_stats_dir = worktree_path / ".agents" / "daily_stats"
+    if not worktree_stats_dir.exists():
+        log.debug("No daily_stats directory in worktree: %s", worktree_path)
+        return False
+
+    # Get today's date to find the relevant stats file
+    today = datetime.now(timezone.utc).date().isoformat()
+    worktree_stats_file = worktree_stats_dir / f"{today}.json"
+
+    if not worktree_stats_file.exists():
+        log.debug("No daily stats file for today in worktree: %s", worktree_stats_file)
+        return False
+
+    try:
+        worktree_stats_data = json.loads(worktree_stats_file.read_text(encoding="utf-8"))
+        worktree_stats = DailyStats.from_dict(worktree_stats_data)
+    except (json.JSONDecodeError, KeyError, OSError) as e:
+        log.warning("Failed to read worktree daily stats: %s", e)
+        return False
+
+    # Create tracker for main repo and merge the stats
+    main_tracker = DailyStatsTracker(repo_root.expanduser().resolve(), logger=log)
+    main_tracker.merge_from(worktree_stats)
+
+    log.info(
+        "Consolidated worktree daily stats: $%.4f from %s",
+        worktree_stats.total_cost_usd,
+        worktree_path.name,
+    )
+    return True
+
+
 def persist_worktree_outputs(worktree_path: Path, repo_root: Path, run_id: str) -> Path:
-    """Copy worktree .agents artifacts into the primary repository."""
+    """Copy worktree .agents artifacts into the primary repository.
+
+    This includes:
+    - Run artifacts from .agents/runs/<run_id>/
+    - Daily stats consolidation (costs are merged into main repo's daily totals)
+    """
+    log = logging.getLogger(__name__)
 
     source_run_dir = worktree_path / ".agents" / "runs" / run_id
     destination_root = repo_root.expanduser().resolve() / ".agents" / "runs"
     destination_root.mkdir(parents=True, exist_ok=True)
     destination = destination_root / run_id
-    if not source_run_dir.exists():
-        return destination
-    shutil.copytree(source_run_dir, destination, dirs_exist_ok=True)
+
+    # Copy run artifacts
+    if source_run_dir.exists():
+        shutil.copytree(source_run_dir, destination, dirs_exist_ok=True)
+
+    # Consolidate daily stats so worktree costs appear in main repo totals
+    try:
+        consolidate_worktree_daily_stats(worktree_path, repo_root, logger=log)
+    except Exception as exc:
+        log.warning("Failed to consolidate worktree daily stats: %s", exc)
+
     return destination

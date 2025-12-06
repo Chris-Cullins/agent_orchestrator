@@ -313,6 +313,88 @@ class DailyStatsTracker:
         within_limit = current_cost < limit_usd
         return within_limit, current_cost, limit_usd
 
+    def merge_from(self, other_stats: DailyStats) -> None:
+        """
+        Merge stats from another DailyStats object into this tracker's current day.
+
+        This is used to consolidate worktree stats into the main repository's
+        daily stats. Only merges runs and steps that don't already exist (by run_id).
+        """
+        if not other_stats or other_stats.date != datetime.now(timezone.utc).date().isoformat():
+            # Only merge stats from the same day
+            if other_stats:
+                self._log.debug(
+                    "Skipping merge for different date: %s vs %s",
+                    other_stats.date,
+                    datetime.now(timezone.utc).date().isoformat(),
+                )
+            return
+
+        stats = self._load_stats()
+
+        # Track which run_ids we've already seen
+        existing_run_ids = set(stats.runs.keys())
+        existing_step_keys = {
+            (s["run_id"], s["step_id"], s.get("timestamp", ""))
+            for s in stats.steps
+        }
+
+        # Merge runs that don't already exist
+        new_runs_added = 0
+        new_steps_added = 0
+
+        for run_id, run_info in other_stats.runs.items():
+            if run_id not in existing_run_ids:
+                stats.runs[run_id] = run_info
+                stats.total_runs += 1
+                if run_info.get("status", "").upper() == "COMPLETED":
+                    stats.completed_runs += 1
+                elif run_info.get("status", "").upper() == "FAILED":
+                    stats.failed_runs += 1
+                new_runs_added += 1
+
+        # Merge steps that don't already exist
+        for step in other_stats.steps:
+            step_key = (step["run_id"], step["step_id"], step.get("timestamp", ""))
+            if step_key not in existing_step_keys:
+                stats.steps.append(step)
+                stats.total_steps += 1
+
+                # Update step status counts
+                if step.get("status", "").upper() == "COMPLETED":
+                    stats.completed_steps += 1
+                else:
+                    stats.failed_steps += 1
+
+                # Update token totals
+                stats.total_input_tokens += step.get("input_tokens", 0)
+                stats.total_output_tokens += step.get("output_tokens", 0)
+
+                # Update cost totals
+                step_cost = step.get("cost_usd", 0.0)
+                stats.total_cost_usd += step_cost
+
+                # Update duration
+                stats.total_duration_ms += step.get("duration_ms", 0)
+
+                # Update per-model stats
+                model = step.get("model", "unknown").lower()
+                stats.cost_by_model[model] = stats.cost_by_model.get(model, 0.0) + step_cost
+                if model not in stats.tokens_by_model:
+                    stats.tokens_by_model[model] = {"input": 0, "output": 0}
+                stats.tokens_by_model[model]["input"] += step.get("input_tokens", 0)
+                stats.tokens_by_model[model]["output"] += step.get("output_tokens", 0)
+
+                new_steps_added += 1
+
+        if new_runs_added > 0 or new_steps_added > 0:
+            self._save_stats(stats)
+            self._log.info(
+                "Merged worktree stats: %d new runs, %d new steps",
+                new_runs_added,
+                new_steps_added,
+            )
+
     def generate_summary(self, for_date: Optional[date] = None) -> str:
         """Generate a human-readable summary for the day."""
         stats = self._load_stats(for_date)
