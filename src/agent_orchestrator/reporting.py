@@ -1,3 +1,16 @@
+"""Run report parsing and validation for agent outputs.
+
+This module provides the RunReportReader class for loading and validating
+JSON run reports written by agents. Run reports communicate:
+    - Execution status (COMPLETED/FAILED)
+    - Output artifacts
+    - Performance metrics
+    - Log messages
+    - Memory updates for AGENTS.md
+
+The reader supports optional JSON schema validation (requires jsonschema)
+and retry logic for handling incomplete writes.
+"""
 from __future__ import annotations
 
 import json
@@ -14,10 +27,24 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 
 
 class RunReportError(Exception):
-    """Raised when a run report cannot be loaded or validated."""
+    """Raised when a run report cannot be loaded or validated.
+
+    This exception is raised for:
+        - Missing report files
+        - Invalid JSON syntax
+        - Missing required fields
+        - JSON schema validation failures
+    """
 
 
 class RunReportReader:
+    """Parse and validate agent run report JSON files.
+
+    The reader loads run reports from disk, validates their structure,
+    and returns RunReport instances. It supports optional JSON schema
+    validation and configurable retry logic for handling incomplete writes.
+    """
+
     def __init__(
         self,
         schema_path: Optional[Path] = None,
@@ -25,6 +52,19 @@ class RunReportReader:
         retry_attempts: int = 3,
         retry_delay: float = 0.2,
     ) -> None:
+        """Initialize the run report reader.
+
+        Args:
+            schema_path: Optional path to JSON schema file for validation.
+                Requires jsonschema package to be installed.
+            retry_attempts: Number of attempts when parsing fails. Useful for
+                handling incomplete file writes. Defaults to 3.
+            retry_delay: Seconds to wait between retry attempts. Defaults to 0.2.
+
+        Raises:
+            RunReportError: If schema_path is provided but jsonschema is not
+                installed, or if the schema file doesn't exist.
+        """
         self._validator = None
         self._retry_attempts = max(1, int(retry_attempts))
         self._retry_delay = max(0.0, float(retry_delay))
@@ -38,6 +78,21 @@ class RunReportReader:
             self._validator = Draft202012Validator(schema)
 
     def read(self, path: Path) -> RunReport:
+        """Read and validate a run report from a JSON file.
+
+        Parses the JSON file, validates required fields and optional schema,
+        and returns a RunReport instance. Uses retry logic to handle
+        incomplete file writes from concurrent agent processes.
+
+        Args:
+            path: Path to the run report JSON file.
+
+        Returns:
+            Validated RunReport instance.
+
+        Raises:
+            RunReportError: If file is missing, malformed, or fails validation.
+        """
         if not path.exists():
             raise RunReportError(f"Run report not found: {path}")
         payload = None

@@ -1,3 +1,27 @@
+"""Workflow execution engine for orchestrating multi-step agent pipelines.
+
+This module provides the core Orchestrator class that manages the execution of
+agent workflows. It handles step dependencies, retry logic, loop-back mechanisms,
+human-in-the-loop pauses, notifications, and state persistence.
+
+Key concepts:
+    - Workflow: A directed graph of steps with dependencies
+    - Step: A single agent task with inputs, outputs, and gates
+    - StepRuntime: Mutable execution state for each step
+    - RunState: Complete state of an orchestration run
+
+Example:
+    >>> from agent_orchestrator.orchestrator import Orchestrator
+    >>> orchestrator = Orchestrator(
+    ...     workflow=workflow,
+    ...     workflow_root=Path("workflows"),
+    ...     repo_dir=Path("/path/to/repo"),
+    ...     report_reader=report_reader,
+    ...     state_persister=state_persister,
+    ...     runner=step_runner,
+    ... )
+    >>> orchestrator.run()
+"""
 from __future__ import annotations
 
 import json
@@ -24,6 +48,19 @@ from .state import RunStatePersister
 
 
 class Orchestrator:
+    """Core workflow execution engine that runs multi-step agent pipelines.
+
+    The Orchestrator manages the complete lifecycle of a workflow run:
+        - Launching agent steps when their dependencies are satisfied
+        - Polling for step completion and collecting run reports
+        - Handling retries, loop-backs, and human-in-the-loop pauses
+        - Persisting execution state for resumability
+        - Sending notifications on failures and human input requests
+        - Tracking daily cost limits and statistics
+
+    Attributes:
+        run_id: Unique identifier for the current orchestration run.
+    """
     def __init__(
         self,
         workflow: Workflow,
@@ -44,6 +81,33 @@ class Orchestrator:
         daily_cost_limit: Optional[float] = None,
         cost_limit_action: str = "warn",  # "warn", "pause", "fail"
     ) -> None:
+        """Initialize the Orchestrator with workflow configuration and dependencies.
+
+        Args:
+            workflow: The workflow definition containing steps and their dependencies.
+            workflow_root: Base directory for resolving relative prompt paths.
+            repo_dir: Target repository directory where agents operate.
+            report_reader: Reader for parsing agent run reports.
+            state_persister: Persister for saving/loading run state.
+            runner: StepRunner instance for launching agent subprocesses.
+            gate_evaluator: Optional evaluator for step gates. Defaults to
+                AlwaysOpenGateEvaluator wrapped in CompositeGateEvaluator.
+            poll_interval: Seconds between polling iterations. Defaults to 1.0.
+            max_attempts: Maximum retry attempts per step. Defaults to 2.
+            max_iterations: Maximum loop-back iterations. Defaults to 4.
+            pause_for_human_input: If True, steps with human_in_the_loop pause
+                for manual input. Defaults to False.
+            logger: Optional logger instance. Defaults to module logger.
+            run_id: Optional run identifier. Auto-generated if not provided.
+            start_at_step: Optional step ID to resume from. Triggers state reload.
+            notification_service: Optional service for failure/pause notifications.
+            daily_cost_limit: Optional daily cost limit in USD.
+            cost_limit_action: Action when cost limit reached: "warn", "pause",
+                or "fail". Defaults to "warn".
+
+        Raises:
+            ValueError: If start_at_step is specified but not found in workflow.
+        """
         self._workflow = workflow
         self._workflow_root = workflow_root
         self._repo_dir = repo_dir
@@ -118,9 +182,25 @@ class Orchestrator:
 
     @property
     def run_id(self) -> str:
+        """Return the unique identifier for this orchestration run."""
         return self._state.run_id
 
     def run(self) -> None:
+        """Execute the workflow until completion or terminal failure.
+
+        This is the main entry point for running a workflow. It continuously:
+            1. Launches steps whose dependencies are satisfied and gates are open
+            2. Collects run reports from completed agent processes
+            3. Handles manual input steps if pause_for_human_input is enabled
+            4. Persists state after each iteration
+
+        The loop exits when all steps are completed/skipped, a terminal failure
+        occurs (step fails after max_attempts), or daily cost limit is reached.
+
+        Raises:
+            RuntimeError: If daily cost limit exceeded and cost_limit_action is "fail".
+            Exception: Re-raises any exception from step execution after cleanup.
+        """
         self._log.info(
             "workflow=%s run_id=%s repo=%s",
             self._workflow.name,
@@ -185,6 +265,11 @@ class Orchestrator:
             self._log_daily_summary()
 
     def _launch_ready_steps(self) -> bool:
+        """Launch all steps whose dependencies are satisfied and gates are open.
+
+        Returns:
+            True if any steps were launched, False otherwise.
+        """
         launched = False
         for step_id, step in self._workflow.steps.items():
             runtime = self._state.steps[step_id]
@@ -265,6 +350,17 @@ class Orchestrator:
         return launched
 
     def _collect_reports(self) -> bool:
+        """Collect and process run reports from completed agent processes.
+
+        Checks each active process for a completed run report. Handles:
+            - Successful completion (marks step COMPLETED or WAITING_ON_HUMAN)
+            - Gate failures (triggers loop-back if configured)
+            - Step failures (schedules retry if attempts remain)
+            - Process exits without reports (marks as FAILED)
+
+        Returns:
+            True if any progress was made, False otherwise.
+        """
         progressed = False
         to_remove = []
         for step_id, launch in list(self._active_processes.items()):
@@ -395,6 +491,14 @@ class Orchestrator:
         return progressed
 
     def _check_manual_steps(self) -> bool:
+        """Check for manual input files and advance waiting steps.
+
+        Scans steps in WAITING_ON_HUMAN status for the presence of their
+        manual_input_path file. When found, marks the step as COMPLETED.
+
+        Returns:
+            True if any steps received manual input, False otherwise.
+        """
         if not self._pause_for_human:
             return False
 
@@ -413,6 +517,17 @@ class Orchestrator:
         return progressed
 
     def _dependencies_satisfied(self, step: Step) -> bool:
+        """Check if all dependencies for a step are satisfied.
+
+        A step's dependencies are satisfied when all steps in its `needs` list
+        are COMPLETED or SKIPPED, and any loop-back blocking is resolved.
+
+        Args:
+            step: The step to check dependencies for.
+
+        Returns:
+            True if all dependencies are satisfied, False otherwise.
+        """
         if not all(
             self._state.steps[dep].status in {StepStatus.COMPLETED, StepStatus.SKIPPED}
             for dep in step.needs
@@ -431,6 +546,14 @@ class Orchestrator:
         return True
 
     def _gates_open(self, step: Step) -> bool:
+        """Check if all gates for a step evaluate to open.
+
+        Args:
+            step: The step to check gates for.
+
+        Returns:
+            True if all gates are open, False if any gate blocks execution.
+        """
         for gate in step.gates:
             if not self._gate_evaluator.evaluate(step, gate):
                 self._log.info("gate blocked step=%s gate=%s", step.id, gate)
@@ -483,6 +606,23 @@ class Orchestrator:
         return env
 
     def _resolve_prompt_path(self, prompt: str) -> Path:
+        """Resolve a prompt reference to an absolute file path.
+
+        Resolution order:
+            1. Absolute path (if prompt is already absolute and exists)
+            2. Local override in repo's `.agents/prompts/` directory
+            3. Relative to workflow root
+            4. Relative to repository root
+
+        Args:
+            prompt: Prompt file path (absolute or relative).
+
+        Returns:
+            Resolved absolute path to the prompt file.
+
+        Raises:
+            FileNotFoundError: If prompt file cannot be found.
+        """
         candidate = Path(prompt)
         if candidate.is_absolute() and candidate.exists():
             return candidate
@@ -787,21 +927,25 @@ class Orchestrator:
             )
 
     def _persist_state(self) -> None:
+        """Save current run state to persistent storage."""
         self._state_persister.save(self._state)
 
     def _all_steps_finished(self) -> bool:
+        """Check if all steps have reached a terminal state (COMPLETED or SKIPPED)."""
         return all(
             runtime.status in {StepStatus.COMPLETED, StepStatus.SKIPPED}
             for runtime in self._state.steps.values()
         )
 
     def _has_terminal_failure(self) -> bool:
+        """Check if any step has failed after exhausting all retry attempts."""
         return any(
             runtime.status == StepStatus.FAILED and runtime.attempts >= self._max_attempts
             for runtime in self._state.steps.values()
         )
 
     def _cleanup_processes(self) -> None:
+        """Terminate any active agent processes and close log handles."""
         for launch in self._active_processes.values():
             if launch.process.poll() is None:
                 launch.process.terminate()
@@ -942,6 +1086,19 @@ def build_default_runner(
     logs_dir: Optional[Path] = None,
     workdir: Optional[Path] = None,
 ) -> StepRunner:
+    """Create a StepRunner with default execution template for agent wrappers.
+
+    Args:
+        repo_dir: Target repository directory for agent operations.
+        wrapper: Path to the wrapper script (e.g., claude_wrapper.py).
+        default_env: Optional environment variables to set for all steps.
+        default_args: Optional additional CLI arguments for all steps.
+        logs_dir: Optional log directory. Defaults to repo_dir/.agents/logs.
+        workdir: Optional working directory for subprocesses. Defaults to repo_dir.
+
+    Returns:
+        Configured StepRunner instance ready for launching agent steps.
+    """
     template = ExecutionTemplate(
         "{python} {wrapper} --run-id {run_id} --step-id {step_id} --agent {agent} "
         "--prompt {prompt} --repo {repo} --report {report}"

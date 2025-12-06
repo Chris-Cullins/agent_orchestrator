@@ -882,6 +882,47 @@ steps:
       key: value
 ```
 
+## API Documentation
+
+The codebase includes **comprehensive Google-style docstrings** for all public modules, classes, and functions. This enables automatic API documentation generation and provides inline help during development.
+
+### Viewing Documentation
+
+Use Python's built-in `pydoc` to browse documentation:
+
+```bash
+# View module documentation
+PYTHONPATH=src python -m pydoc agent_orchestrator
+
+# View specific class documentation
+PYTHONPATH=src python -m pydoc agent_orchestrator.orchestrator.Orchestrator
+
+# Generate HTML documentation
+PYTHONPATH=src python -m pydoc -w agent_orchestrator
+```
+
+### Generating Static Documentation
+
+For full documentation site generation, see `docs/api_documentation.md` which covers:
+
+- **MkDocs with mkdocstrings** (recommended) — Markdown-native, simple configuration
+- **Sphinx with autodoc** — Industry standard, more advanced features
+
+### Documented Modules
+
+All public modules have docstrings covering:
+- `orchestrator.py` — Core workflow execution engine
+- `models.py` — Data structures (Step, Workflow, RunState, LoopConfig)
+- `runner.py` — Agent subprocess management
+- `workflow.py` — Workflow loading and validation
+- `state.py` — State persistence
+- `reporting.py` — Run report parsing
+- `gating.py` — Conditional step execution
+- `git_worktree.py` — Git worktree isolation
+- `cli.py` — Command-line interface
+- `notifications/` — Notification services
+- `wrappers/` — Agent execution adapters (Claude, Codex)
+
 ## Project Layout
 
 - `src/agent_orchestrator/` — Main package code
@@ -900,6 +941,10 @@ steps:
   - `wrappers/` — Agent execution adapters
   - `scripts/` — Utility scripts
     - `run_workflow.sh` — Convenience script for running workflows
+- `docs/` — Additional documentation
+  - `api_documentation.md` — API documentation generation guide
+  - `state_file_schema.md` — Run state file schema reference
+  - `cost_optimization_roadmap.md` — Cost optimization strategies
 - `src/agent_orchestrator/workflows/workflow.yaml` — Complete SDLC pipeline definition
 - `src/agent_orchestrator/workflows/workflow_backlog_miner.yaml` — Architecture and tech debt analysis workflow
 - `src/agent_orchestrator/workflows/workflow_large_work.yaml` — Multi-story development with loop control

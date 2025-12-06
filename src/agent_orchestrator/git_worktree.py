@@ -1,3 +1,12 @@
+"""Git worktree management for isolated workflow execution.
+
+This module provides utilities for creating and managing git worktrees,
+enabling the orchestrator to run agents in isolated branches without
+affecting the main repository checkout. Key features:
+    - Create worktrees on new branches from any ref
+    - Automatic cleanup after workflow completion
+    - Artifact persistence back to main repository
+"""
 from __future__ import annotations
 
 import logging
@@ -18,12 +27,25 @@ __all__ = [
 
 
 class GitWorktreeError(RuntimeError):
-    """Raised when git worktree operations fail."""
+    """Raised when git worktree operations fail.
+
+    This includes errors from git commands (branch exists, not a repo, etc.)
+    and validation failures (invalid branch names, paths outside repo).
+    """
 
 
 @dataclass
 class GitWorktreeHandle:
-    """Metadata about a managed git worktree."""
+    """Handle to a managed git worktree created for an orchestration run.
+
+    Attributes:
+        root_repo: Path to the main repository.
+        path: Path to the worktree directory.
+        branch: Git branch name created for this worktree.
+        base_ref: Git ref the branch was created from.
+        run_id: Unique identifier for this run.
+        created_branch: Whether a new branch was created (vs using existing).
+    """
 
     root_repo: Path
     path: Path
@@ -34,9 +56,22 @@ class GitWorktreeHandle:
 
 
 class GitWorktreeManager:
-    """Create and clean up git worktrees for orchestrator runs."""
+    """Manage git worktrees for isolated orchestrator runs.
+
+    Creates worktrees in a dedicated directory (.agents/worktrees by default),
+    each on its own branch. Handles cleanup including branch deletion.
+    """
 
     def __init__(self, repo_dir: Path, git_executable: str = "git") -> None:
+        """Initialize the worktree manager.
+
+        Args:
+            repo_dir: Path to the git repository.
+            git_executable: Name or path of the git executable.
+
+        Raises:
+            GitWorktreeError: If repo_dir is not a git repository.
+        """
         self._logger = logging.getLogger(__name__)
         self._git = git_executable
         self._repo_dir = self._resolve_repo_root(repo_dir)
@@ -50,6 +85,7 @@ class GitWorktreeManager:
 
     @property
     def repo_root(self) -> Path:
+        """Return the resolved root path of the git repository."""
         return self._repo_dir
 
     def create(
@@ -58,6 +94,19 @@ class GitWorktreeManager:
         ref: Optional[str] = None,
         branch: Optional[str] = None,
     ) -> GitWorktreeHandle:
+        """Create a new git worktree for an orchestration run.
+
+        Args:
+            root: Directory to contain worktrees. Defaults to .agents/worktrees.
+            ref: Git ref to base the worktree on. Defaults to HEAD.
+            branch: Branch name to create. Defaults to agents/run-<id>.
+
+        Returns:
+            GitWorktreeHandle for the created worktree.
+
+        Raises:
+            GitWorktreeError: If worktree creation fails or branch already exists.
+        """
         repo_root = self._repo_dir
         worktree_root = self._resolve_root_directory(root)
         run_id = uuid.uuid4().hex[:8]
@@ -106,6 +155,16 @@ class GitWorktreeManager:
         force: bool = True,
         delete_branch: bool = True,
     ) -> None:
+        """Remove a worktree and optionally its branch.
+
+        Args:
+            handle: GitWorktreeHandle returned from create().
+            force: Force removal even with uncommitted changes. Defaults to True.
+            delete_branch: Delete the worktree's branch. Defaults to True.
+
+        Raises:
+            GitWorktreeError: If worktree removal fails.
+        """
         args = ["worktree", "remove"]
         if force:
             args.append("--force")
@@ -166,8 +225,20 @@ class GitWorktreeManager:
 
 
 def persist_worktree_outputs(worktree_path: Path, repo_root: Path, run_id: str) -> Path:
-    """Copy worktree .agents artifacts into the primary repository."""
+    """Copy worktree run artifacts back to the primary repository.
 
+    After a workflow run in a worktree, this function copies the run's
+    artifacts (reports, logs, state) to the main repository's .agents/runs
+    directory for persistence.
+
+    Args:
+        worktree_path: Path to the worktree directory.
+        repo_root: Path to the main repository.
+        run_id: Unique identifier for the run.
+
+    Returns:
+        Path to the destination run directory in the main repository.
+    """
     source_run_dir = worktree_path / ".agents" / "runs" / run_id
     destination_root = repo_root.expanduser().resolve() / ".agents" / "runs"
     destination_root.mkdir(parents=True, exist_ok=True)

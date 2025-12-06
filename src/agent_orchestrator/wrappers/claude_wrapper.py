@@ -1,7 +1,21 @@
 #!/usr/bin/env python3
-"""
-Custom wrapper for the Claude CLI.
-This adapts the orchestrator's expected interface to the real claude command.
+"""Wrapper script for adapting the orchestrator interface to Claude CLI.
+
+This wrapper bridges the agent orchestrator's execution model to the Claude CLI,
+handling:
+    - Prompt enhancement with context, run reports, and memory instructions
+    - Model selection with priority (STEP_MODEL env > --model arg > default)
+    - Token and cost extraction from Claude CLI output
+    - Run report parsing and synthesis
+    - Daily statistics tracking
+
+The wrapper reads the prompt file, enhances it with context, invokes Claude CLI
+with appropriate flags, and writes a run report JSON file.
+
+Usage:
+    python claude_wrapper.py --run-id abc123 --step-id coding_impl \\
+        --agent coding --prompt prompts/coding.md --repo /path/to/repo \\
+        --report .agents/runs/abc123/reports/abc123__coding_impl.json
 """
 
 import argparse
@@ -28,6 +42,15 @@ from agent_orchestrator.daily_stats import calculate_cost, DailyStatsTracker
 
 
 def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, list[str]]:
+    """Parse command-line arguments for the wrapper.
+
+    Args:
+        argv: Command-line arguments. Defaults to sys.argv if None.
+
+    Returns:
+        Tuple of (parsed_args, remaining_args) where remaining_args
+        are forwarded to the Claude CLI.
+    """
     parser = argparse.ArgumentParser(
         description="Wrapper that adapts orchestrator interface to Claude CLI."
     )
@@ -63,7 +86,19 @@ def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, li
 
 
 def get_model(args: argparse.Namespace) -> str:
-    """Determine which model to use with priority: STEP_MODEL env > --model arg > default."""
+    """Determine which model to use based on priority order.
+
+    Priority order:
+        1. STEP_MODEL environment variable (set by orchestrator from workflow)
+        2. --model command-line argument
+        3. Default: "opus"
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        Model identifier string (e.g., "opus", "sonnet", "haiku").
+    """
     # Priority 1: STEP_MODEL environment variable (set by orchestrator from workflow)
     step_model = os.environ.get("STEP_MODEL")
     if step_model:
@@ -81,8 +116,23 @@ def build_claude_command(
     started_at: str,
     model: str,
 ) -> tuple[list[str], str]:
-    """Build the claude command and create the prompt content."""
+    """Build the Claude CLI command and enhanced prompt content.
 
+    Reads the prompt file, enhances it with context (agent info, repository
+    memories, run report instructions), and constructs the command line.
+
+    Args:
+        args: Parsed command-line arguments.
+        forwarded: Additional arguments to forward to Claude CLI.
+        started_at: ISO 8601 timestamp when execution started.
+        model: Model identifier to use.
+
+    Returns:
+        Tuple of (command_list, enhanced_prompt_string).
+
+    Raises:
+        FileNotFoundError: If the prompt file doesn't exist.
+    """
     # Read the prompt file
     prompt_path = Path(args.prompt)
     if not prompt_path.exists():
@@ -138,7 +188,17 @@ Please proceed with the task and ensure you include the run report at the end.
 
 
 def extract_run_report(text: str) -> Optional[Dict[str, Any]]:
-    """Extract run report from Claude output."""
+    """Extract run report JSON from Claude's text output.
+
+    Searches for the run report markers and parses the JSON between them.
+    Uses rfind to get the last occurrence in case of multiple reports.
+
+    Args:
+        text: Claude CLI output text.
+
+    Returns:
+        Parsed run report dictionary, or None if not found or invalid.
+    """
     start = text.rfind(RUN_REPORT_START)
     end = text.rfind(RUN_REPORT_END)
     if start == -1 or end == -1 or end <= start:
@@ -261,7 +321,24 @@ def synthesize_report(
     duration_ms: int,
     artifacts: Optional[list[str]] = None,
 ) -> Dict[str, Any]:
-    """Create a synthetic run report when Claude doesn't provide one."""
+    """Create a synthetic run report when Claude doesn't provide one.
+
+    Used as a fallback when Claude's output doesn't contain a properly
+    formatted run report.
+
+    Args:
+        run_id: Unique identifier for the orchestration run.
+        step_id: Identifier of the step.
+        agent: Agent type that executed.
+        status: Execution status ("COMPLETED" or "FAILED").
+        started_at: ISO 8601 timestamp when execution started.
+        logs: Log messages to include.
+        duration_ms: Execution duration in milliseconds.
+        artifacts: Optional list of artifact paths.
+
+    Returns:
+        Run report dictionary in the standard schema.
+    """
     return {
         "schema": "run_report@v0",
         "run_id": run_id,
@@ -280,6 +357,17 @@ def synthesize_report(
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    """Entry point for the Claude wrapper script.
+
+    Parses arguments, builds the enhanced prompt, invokes Claude CLI,
+    extracts or synthesizes a run report, and writes it to the report path.
+
+    Args:
+        argv: Command-line arguments. Defaults to sys.argv if None.
+
+    Returns:
+        Exit code (0 for success, non-zero for failure).
+    """
     args, forwarded = parse_args(argv)
 
     report_path = Path(args.report)

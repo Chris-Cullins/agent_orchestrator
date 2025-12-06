@@ -1,3 +1,21 @@
+"""Workflow loading and validation from YAML files.
+
+This module provides functions for loading workflow definitions from YAML,
+validating their structure, and ensuring all step references are valid.
+
+The workflow YAML format includes:
+    - name: Workflow name
+    - description: Brief description
+    - steps: List of step definitions
+
+Each step must define:
+    - id: Unique step identifier
+    - agent: Agent type to execute
+    - prompt: Path to prompt file
+    - needs: (optional) List of dependency step IDs
+    - loop: (optional) Loop configuration for iteration
+    - loop_back_to: (optional) Target step for gate failure loop-back
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,11 +27,30 @@ from .models import LoopConfig, Step, Workflow
 
 
 class WorkflowLoadError(Exception):
-    """Raised when a workflow file is invalid."""
+    """Raised when a workflow file cannot be loaded or is invalid.
+
+    This exception is raised for:
+        - Missing workflow files
+        - Invalid YAML syntax
+        - Missing required fields (id, agent, prompt)
+        - Invalid step references (unknown dependencies, loop targets)
+        - Invalid loop configurations
+    """
 
 
 def _parse_loop_config(loop_data: Any, step_id: str) -> LoopConfig:
-    """Parse loop configuration from YAML data."""
+    """Parse loop configuration from YAML data.
+
+    Args:
+        loop_data: Raw loop configuration from YAML.
+        step_id: Step ID for error messages.
+
+    Returns:
+        Validated LoopConfig instance.
+
+    Raises:
+        WorkflowLoadError: If loop configuration is invalid.
+    """
     if not isinstance(loop_data, dict):
         raise WorkflowLoadError(f"Step '{step_id}' has invalid loop config - must be a mapping")
 
@@ -46,6 +83,21 @@ def _parse_loop_config(loop_data: Any, step_id: str) -> LoopConfig:
 
 
 def load_workflow(path: Path) -> Workflow:
+    """Load a workflow definition from a YAML file.
+
+    Parses the workflow YAML, constructs Step objects for each defined step,
+    and validates all step references (dependencies, loop targets).
+
+    Args:
+        path: Path to the workflow YAML file.
+
+    Returns:
+        Validated Workflow instance ready for execution.
+
+    Raises:
+        WorkflowLoadError: If the file is missing, malformed, or contains
+            invalid step references.
+    """
     if not path.exists():
         raise WorkflowLoadError(f"Workflow file not found: {path}")
 
@@ -99,6 +151,17 @@ def load_workflow(path: Path) -> Workflow:
 
 
 def _validate_edges(steps: Dict[str, Step]) -> None:
+    """Validate all step references point to existing steps.
+
+    Checks that all step dependencies, next_on_success references,
+    loop_back_to targets, and loop items_from_step references are valid.
+
+    Args:
+        steps: Dictionary mapping step IDs to Step definitions.
+
+    Raises:
+        WorkflowLoadError: If any step reference is invalid.
+    """
     for step in steps.values():
         for dep in step.needs:
             if dep not in steps:

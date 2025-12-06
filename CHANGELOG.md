@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Comprehensive docstrings for all public modules, classes, and functions** (Issue #28)
+  - Added Google-style docstrings throughout the codebase for API documentation
+  - Core modules documented: `orchestrator.py`, `models.py`, `runner.py`, `workflow.py`, `state.py`, `reporting.py`, `gating.py`, `git_worktree.py`, `cli.py`
+  - Notifications package fully documented with interface descriptions
+  - Wrappers enhanced with detailed usage instructions and parameter documentation
+  - Added `docs/api_documentation.md` with API documentation generation guide
+  - Evaluated MkDocs vs Sphinx; recommended MkDocs with mkdocstrings for Markdown-native documentation
+  - All docstrings compatible with pydoc and standard documentation generators
+
 - **Loop control structure for iterating over collections in workflows** (Issue #63)
   - Added `LoopConfig` model to define loop behavior with multiple item sources
   - Added `loop` field to Step model for configuring iteration over collections

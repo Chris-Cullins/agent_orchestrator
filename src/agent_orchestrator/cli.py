@@ -1,3 +1,16 @@
+"""Command-line interface for the agent orchestrator.
+
+This module provides the CLI entry point for running workflow orchestration.
+It supports two main commands:
+    - run: Execute a workflow against a target repository
+    - stats: View daily cost and usage statistics
+
+Example:
+    python -m agent_orchestrator.cli run \\
+        --repo /path/to/repo \\
+        --workflow workflows/sdlc.yaml \\
+        --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py
+"""
 from __future__ import annotations
 
 import argparse
@@ -28,6 +41,17 @@ _LOG = logging.getLogger(__name__)
 
 
 def parse_env(env_pairs: Optional[list[str]]) -> Dict[str, str]:
+    """Parse KEY=VALUE environment variable pairs from CLI arguments.
+
+    Args:
+        env_pairs: List of "KEY=VALUE" strings from --env arguments.
+
+    Returns:
+        Dictionary mapping environment variable names to values.
+
+    Raises:
+        argparse.ArgumentTypeError: If any pair is not in KEY=VALUE format.
+    """
     result: Dict[str, str] = {}
     if not env_pairs:
         return result
@@ -40,6 +64,17 @@ def parse_env(env_pairs: Optional[list[str]]) -> Dict[str, str]:
 
 
 def _build_notification_service(repo_dir: Path) -> NotificationService:
+    """Build a notification service from repository configuration.
+
+    Args:
+        repo_dir: Path to the repository for config lookup.
+
+    Returns:
+        Configured NotificationService instance.
+
+    Raises:
+        SystemExit: If email configuration is invalid.
+    """
     email_logger = logging.getLogger("agent_orchestrator.email")
     try:
         return build_email_notification_service(repo_dir, logger=email_logger)
@@ -56,6 +91,27 @@ def build_runner(
     base_env: Dict[str, str],
     wrapper_args: list[str],
 ) -> StepRunner:
+    """Build a StepRunner from CLI arguments.
+
+    Creates a StepRunner using either a custom command template or
+    the default wrapper-based template.
+
+    Args:
+        repo_dir: Target repository directory.
+        wrapper: Path to wrapper script (mutually exclusive with command_template).
+        command_template: Custom command template string.
+        logs_dir: Optional log directory override.
+        workdir: Optional working directory for subprocesses.
+        base_env: Environment variables to set for all steps.
+        wrapper_args: Additional arguments for wrapper commands.
+
+    Returns:
+        Configured StepRunner instance.
+
+    Raises:
+        ValueError: If neither wrapper nor command_template is provided.
+        FileNotFoundError: If wrapper script doesn't exist.
+    """
     logs_dir = logs_dir or (repo_dir / ".agents" / "logs")
     workdir = workdir or repo_dir
 
@@ -88,6 +144,17 @@ def build_runner(
 
 
 def run_from_args(args: argparse.Namespace) -> None:
+    """Execute the 'run' subcommand with parsed arguments.
+
+    Loads the workflow, optionally creates a git worktree, configures
+    the orchestrator, and runs the workflow to completion.
+
+    Args:
+        args: Parsed CLI arguments from build_parser().
+
+    Raises:
+        SystemExit: On configuration errors, workflow errors, or git errors.
+    """
     repo_dir = Path(args.repo).expanduser().resolve()
     run_repo_dir = repo_dir
     repo_root_for_outputs = repo_dir
@@ -233,6 +300,11 @@ def run_from_args(args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the CLI argument parser.
+
+    Returns:
+        ArgumentParser configured with 'run' and 'stats' subcommands.
+    """
     parser = argparse.ArgumentParser(prog="agent-orchestrator", description="File-driven SDLC agent orchestrator")
     parser.add_argument("--log-level", default="INFO", help="Logging level (default: INFO)")
 
@@ -347,7 +419,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def stats_from_args(args: argparse.Namespace) -> None:
-    """Handle the stats subcommand."""
+    """Execute the 'stats' subcommand with parsed arguments.
+
+    Displays daily cost and usage statistics for the repository.
+
+    Args:
+        args: Parsed CLI arguments from build_parser().
+
+    Raises:
+        SystemExit: If date format is invalid.
+    """
     repo_dir = Path(args.repo).expanduser().resolve()
     tracker = DailyStatsTracker(repo_dir)
 
@@ -380,6 +461,14 @@ def stats_from_args(args: argparse.Namespace) -> None:
 
 
 def main(argv: Optional[list[str]] = None) -> None:
+    """CLI entry point for the agent orchestrator.
+
+    Parses arguments, configures logging, and dispatches to the
+    appropriate subcommand handler.
+
+    Args:
+        argv: Command-line arguments. Defaults to sys.argv if None.
+    """
     parser = build_parser()
     args = parser.parse_args(argv)
 
