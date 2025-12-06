@@ -327,20 +327,31 @@ a report so the rest of the workflow can continue.
 
 ## Appendix A: File Layout
 
+All modules include comprehensive Google-style docstrings with Args, Returns, Raises, and Attributes sections. Use `help(module)` in Python to explore the API documentation.
+
 ```
 agent_orchestrator/
 ├── src/agent_orchestrator/
-│   ├── cli.py
-│   ├── orchestrator.py
-│   ├── runner.py
-│   ├── workflow.py
-│   ├── reporting.py
-│   ├── time_utils.py
-│   ├── gating.py
-│   ├── state.py
+│   ├── cli.py              # CLI entry points (documented)
+│   ├── orchestrator.py     # Core workflow engine (documented)
+│   ├── runner.py           # Agent process management (documented)
+│   ├── workflow.py         # Workflow YAML loading (documented)
+│   ├── models.py           # Data structures (documented)
+│   ├── reporting.py        # Run report parsing (documented)
+│   ├── time_utils.py       # Timestamp helpers (documented)
+│   ├── gating.py           # Gate evaluation (documented)
+│   ├── state.py            # State persistence (documented)
+│   ├── memory.py           # AGENTS.md memory (documented)
+│   ├── guidance.py         # Architectural guidance (documented)
+│   ├── daily_stats.py      # Cost tracking (documented)
+│   ├── git_worktree.py     # Worktree utilities (documented)
+│   ├── run_report_format.py # Report validation (documented)
+│   ├── notifications/      # Notification services (documented)
+│   │   ├── __init__.py
+│   │   └── email.py
 │   ├── prompts/
 │   ├── workflows/
-│   └── wrappers/
+│   └── wrappers/           # Agent adapters (documented)
 │       ├── claude_wrapper.py
 │       └── codex_wrapper.py
 ├── tests/

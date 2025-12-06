@@ -1,7 +1,21 @@
 #!/usr/bin/env python3
 """
-Custom wrapper for the actual codex exec command.
-This adapts the orchestrator's expected interface to the real codex exec.
+Wrapper for the Codex CLI that adapts the orchestrator interface.
+
+This module bridges the orchestrator's step execution model to Codex,
+handling:
+- Prompt enhancement with context (memory, run report instructions)
+- Run report generation (extracting from output or synthesizing)
+
+Usage:
+    python codex_wrapper.py --run-id <id> --step-id <id> --agent <name> \\
+        --prompt <file> --repo <path> --report <path>
+
+Environment variables:
+    CODEX_EXEC_BIN: Path to codex binary
+
+Note: Codex uses its own model selection, so --model and STEP_MODEL
+are accepted for compatibility but not used.
 """
 
 import argparse

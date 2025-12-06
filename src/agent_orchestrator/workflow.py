@@ -1,3 +1,18 @@
+"""
+Workflow loading and validation from YAML files.
+
+This module handles parsing workflow YAML definitions into Workflow
+objects, validating step references, and checking for configuration
+errors.
+
+Workflow files define:
+- Steps with agents and prompts
+- Step dependencies (needs)
+- Gates for conditional execution
+- Loop configurations for iteration
+- Loop-back targets for iterative refinement
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,11 +24,23 @@ from .models import LoopConfig, Step, Workflow
 
 
 class WorkflowLoadError(Exception):
-    """Raised when a workflow file is invalid."""
+    """Raised when a workflow file cannot be loaded or is invalid."""
 
 
 def _parse_loop_config(loop_data: Any, step_id: str) -> LoopConfig:
-    """Parse loop configuration from YAML data."""
+    """
+    Parse loop configuration from YAML step data.
+
+    Args:
+        loop_data: Raw loop configuration dictionary from YAML.
+        step_id: ID of the step for error messages.
+
+    Returns:
+        Validated LoopConfig instance.
+
+    Raises:
+        WorkflowLoadError: If loop configuration is invalid.
+    """
     if not isinstance(loop_data, dict):
         raise WorkflowLoadError(f"Step '{step_id}' has invalid loop config - must be a mapping")
 
@@ -46,6 +73,21 @@ def _parse_loop_config(loop_data: Any, step_id: str) -> LoopConfig:
 
 
 def load_workflow(path: Path) -> Workflow:
+    """
+    Load and validate a workflow from a YAML file.
+
+    Parses the workflow definition, validates all step references
+    and dependencies, and returns a fully initialized Workflow object.
+
+    Args:
+        path: Path to the workflow YAML file.
+
+    Returns:
+        Validated Workflow instance ready for execution.
+
+    Raises:
+        WorkflowLoadError: If file is missing, malformed, or has invalid references.
+    """
     if not path.exists():
         raise WorkflowLoadError(f"Workflow file not found: {path}")
 
@@ -99,6 +141,18 @@ def load_workflow(path: Path) -> Workflow:
 
 
 def _validate_edges(steps: Dict[str, Step]) -> None:
+    """
+    Validate all step cross-references in a workflow.
+
+    Checks that all referenced step IDs in needs, next_on_success,
+    loop_back_to, and loop.items_from_step actually exist.
+
+    Args:
+        steps: Dictionary of step ID to Step objects.
+
+    Raises:
+        WorkflowLoadError: If any referenced step ID is not found.
+    """
     for step in steps.values():
         for dep in step.needs:
             if dep not in steps:

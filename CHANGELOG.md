@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Comprehensive docstrings for all public modules** (Issue #28)
+  - Added module-level docstrings describing purpose and usage for all core modules
+  - Added class docstrings with attributes documentation for all dataclasses and classes
+  - Added function/method docstrings with Args, Returns, and Raises sections
+  - Covered modules across all milestones:
+    - Core: `orchestrator.py`, `models.py`, `runner.py`
+    - CLI: `cli.py`, `workflow.py`, `reporting.py`, `state.py`
+    - Features: `gating.py`, `memory.py`, `guidance.py`
+    - Utilities: `time_utils.py`, `daily_stats.py`, `git_worktree.py`, `run_report_format.py`
+    - Notifications: `notifications/__init__.py`, `notifications/email.py`
+    - Wrappers: `wrappers/claude_wrapper.py`, `wrappers/codex_wrapper.py`
+  - Docstrings follow Google style with Args, Returns, Raises, and Attributes sections
 - **Loop control structure for iterating over collections in workflows** (Issue #63)
   - Added `LoopConfig` model to define loop behavior with multiple item sources
   - Added `loop` field to Step model for configuring iteration over collections

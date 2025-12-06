@@ -1,3 +1,25 @@
+"""
+Email notification service for workflow events.
+
+This module provides SMTP-based email notifications for workflow
+events such as step failures and human-in-the-loop pauses.
+
+Configuration is loaded from config/email_notifications.yaml in the
+repository with the following structure:
+
+    enabled: true
+    sender: orchestrator@example.com
+    recipients:
+      - team@example.com
+    subject_prefix: "[Agent Orchestrator]"
+    smtp:
+      host: smtp.example.com
+      port: 587
+      username: user
+      password: secret
+      use_tls: true
+"""
+
 from __future__ import annotations
 
 import contextlib
@@ -22,6 +44,18 @@ class EmailConfigError(ValueError):
 
 @dataclass
 class SMTPSettings:
+    """
+    SMTP server connection settings.
+
+    Attributes:
+        host: SMTP server hostname.
+        port: SMTP server port (typically 587 for TLS).
+        username: Optional authentication username.
+        password: Optional authentication password.
+        use_tls: Whether to use STARTTLS. Defaults to True.
+        timeout: Connection timeout in seconds. Defaults to 30.
+    """
+
     host: str
     port: int
     username: Optional[str] = None
@@ -32,6 +66,17 @@ class SMTPSettings:
 
 @dataclass
 class EmailNotificationConfig:
+    """
+    Email notification configuration.
+
+    Attributes:
+        enabled: Whether email notifications are active.
+        sender: Email address for the From field.
+        recipients: List of recipient email addresses.
+        smtp: SMTP server settings.
+        subject_prefix: Prefix for email subject lines.
+    """
+
     enabled: bool = False
     sender: Optional[str] = None
     recipients: List[str] = field(default_factory=list)
@@ -39,6 +84,12 @@ class EmailNotificationConfig:
     subject_prefix: str = "[Agent Orchestrator]"
 
     def require_transport(self) -> None:
+        """
+        Validate that all required settings are present when enabled.
+
+        Raises:
+            EmailConfigError: If required settings are missing.
+        """
         if not self.enabled:
             return
         if not self.sender:
@@ -50,6 +101,7 @@ class EmailNotificationConfig:
 
 
 def _load_yaml(path: Path) -> dict:
+    """Load and validate YAML configuration file."""
     with path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle) or {}
     if not isinstance(data, dict):
@@ -58,6 +110,7 @@ def _load_yaml(path: Path) -> dict:
 
 
 def _parse_smtp_settings(data: dict) -> SMTPSettings:
+    """Parse and validate SMTP settings from configuration data."""
     if "host" not in data:
         raise EmailConfigError("SMTP configuration missing 'host'")
     if "port" not in data:
@@ -95,9 +148,21 @@ def load_email_notification_config(
     *,
     config_path: Optional[Path] = None,
 ) -> EmailNotificationConfig:
-    """Load the email notification configuration from disk.
+    """
+    Load email notification configuration from disk.
 
-    If the configuration file is missing, notifications are disabled by default.
+    If the configuration file is missing, returns a disabled configuration.
+    If the file exists but is invalid or incomplete, raises EmailConfigError.
+
+    Args:
+        repo_dir: Path to the repository root.
+        config_path: Optional override path to config file.
+
+    Returns:
+        EmailNotificationConfig instance.
+
+    Raises:
+        EmailConfigError: If configuration is invalid.
     """
 
     path = (config_path or (repo_dir / DEFAULT_CONFIG_RELATIVE_PATH)).resolve()
@@ -140,6 +205,8 @@ def load_email_notification_config(
 
 
 class _SMTPConnection(contextlib.AbstractContextManager):
+    """Context manager for SMTP connections with automatic cleanup."""
+
     def __init__(self, settings: SMTPSettings) -> None:
         self._settings = settings
         self._client: Optional[smtplib.SMTP] = None
@@ -169,7 +236,17 @@ class _SMTPConnection(contextlib.AbstractContextManager):
 
 
 class EmailNotificationService(NotificationService):
-    """Send workflow notifications via email using SMTP."""
+    """
+    Send workflow notifications via email using SMTP.
+
+    Sends notifications about step failures and human-input-required
+    pauses to configured recipients.
+
+    Args:
+        config: Email notification configuration.
+        transport_factory: Optional factory for creating SMTP connections.
+        logger: Optional logger instance.
+    """
 
     def __init__(
         self,
@@ -284,8 +361,22 @@ def build_email_notification_service(
     logger: Optional[logging.Logger] = None,
     config_path: Optional[Path] = None,
 ) -> NotificationService:
-    """Construct the notification service for a repository."""
+    """
+    Construct the notification service for a repository.
 
+    Loads configuration and creates an EmailNotificationService instance.
+
+    Args:
+        repo_dir: Path to the repository root.
+        logger: Optional logger instance.
+        config_path: Optional override path to config file.
+
+    Returns:
+        Configured EmailNotificationService instance.
+
+    Raises:
+        EmailConfigError: If configuration is invalid.
+    """
     config = load_email_notification_config(repo_dir, config_path=config_path)
     return EmailNotificationService(config, logger=logger)
 

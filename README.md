@@ -1011,6 +1011,80 @@ steps:
       key: value
 ```
 
+## API Documentation
+
+All public modules include comprehensive docstrings following Google style conventions. This makes the codebase self-documenting and enables IDE features like autocomplete and hover documentation.
+
+### Exploring the API
+
+You can explore the API documentation using Python's built-in `help()` function or your IDE's documentation features:
+
+```python
+# In a Python shell or script
+from agent_orchestrator import orchestrator, models, runner
+
+# View module-level documentation
+help(orchestrator)
+
+# View class documentation with attributes
+help(models.Step)
+help(models.StepRuntime)
+help(models.LoopConfig)
+
+# View function/method documentation with Args, Returns, Raises
+help(orchestrator.Orchestrator.run)
+help(runner.Runner.run_step)
+```
+
+### Documented Modules
+
+The following modules include complete docstrings with Args, Returns, Raises, and Attributes sections:
+
+| Module | Description |
+|--------|-------------|
+| `orchestrator.py` | Core workflow execution engine with loop control support |
+| `models.py` | Data structures and contracts (Step, StepRuntime, LoopConfig, etc.) |
+| `runner.py` | Agent process management and execution |
+| `cli.py` | Command-line interface entry points |
+| `workflow.py` | Workflow YAML loading and validation |
+| `state.py` | Execution state persistence (RunStatePersister) |
+| `reporting.py` | Run report validation and parsing |
+| `gating.py` | Conditional workflow progression and gate evaluation |
+| `memory.py` | Persistent agent memory via AGENTS.md files |
+| `guidance.py` | Architectural guidance document system |
+| `time_utils.py` | Timezone-aware timestamp helpers |
+| `daily_stats.py` | Daily cost tracking and statistics |
+| `git_worktree.py` | Git worktree isolation utilities |
+| `run_report_format.py` | Run report format validation |
+| `notifications/__init__.py` | Notification service interfaces |
+| `notifications/email.py` | SMTP email notification implementation |
+| `wrappers/claude_wrapper.py` | Anthropic Claude CLI integration |
+| `wrappers/codex_wrapper.py` | OpenAI Codex integration |
+
+### Docstring Style
+
+All docstrings follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings):
+
+```python
+def example_function(param1: str, param2: int) -> bool:
+    """Short description of what the function does.
+
+    Longer description if needed, explaining behavior,
+    edge cases, or important details.
+
+    Args:
+        param1: Description of param1.
+        param2: Description of param2.
+
+    Returns:
+        Description of return value.
+
+    Raises:
+        ValueError: When param2 is negative.
+        FileNotFoundError: When param1 path doesn't exist.
+    """
+```
+
 ## Project Layout
 
 - `src/agent_orchestrator/` — Main package code

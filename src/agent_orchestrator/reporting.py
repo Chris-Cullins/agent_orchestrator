@@ -1,3 +1,17 @@
+"""
+Run report parsing and validation.
+
+This module handles reading and validating agent run reports from JSON files.
+Reports communicate step completion status, artifacts, metrics, and any
+memory updates back to the orchestrator.
+
+The reader supports:
+- Optional JSON schema validation
+- Retry logic for transient file system issues
+- Status normalization from various formats
+- Memory update parsing
+"""
+
 from __future__ import annotations
 
 import json
@@ -20,10 +34,17 @@ _STATUS_ALIASES = {
 
 
 def normalize_status(status: str) -> str:
-    """Normalize agent-reported status to orchestrator-expected values.
+    """
+    Normalize agent-reported status to orchestrator-expected values.
 
-    Agents may report status as 'success' or 'failed' (per prompts),
-    but the orchestrator expects 'COMPLETED' or 'FAILED'.
+    Agents may report status in various formats (e.g., "success", "OK",
+    "passed"), but the orchestrator expects "COMPLETED" or "FAILED".
+
+    Args:
+        status: Status string from the agent's run report.
+
+    Returns:
+        Normalized status string ("COMPLETED", "FAILED", or original uppercase).
     """
     upper = str(status).upper()
     return _STATUS_ALIASES.get(upper, upper)
@@ -35,10 +56,25 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 
 
 class RunReportError(Exception):
-    """Raised when a run report cannot be loaded or validated."""
+    """Raised when a run report cannot be loaded, parsed, or validated."""
 
 
 class RunReportReader:
+    """
+    Read and validate agent run reports from JSON files.
+
+    Supports optional JSON schema validation and automatic retries for
+    transient file system errors (e.g., incomplete writes).
+
+    Args:
+        schema_path: Optional path to JSON schema for validation.
+        retry_attempts: Number of attempts for reading files. Defaults to 3.
+        retry_delay: Seconds between retry attempts. Defaults to 0.2.
+
+    Raises:
+        RunReportError: If schema_path is provided but jsonschema is not installed.
+    """
+
     def __init__(
         self,
         schema_path: Optional[Path] = None,
@@ -59,6 +95,21 @@ class RunReportReader:
             self._validator = Draft202012Validator(schema)
 
     def read(self, path: Path) -> RunReport:
+        """
+        Read and parse a run report from a JSON file.
+
+        Validates the report against the schema if one was provided,
+        normalizes status values, and parses memory updates.
+
+        Args:
+            path: Path to the run report JSON file.
+
+        Returns:
+            Parsed and validated RunReport instance.
+
+        Raises:
+            RunReportError: If file cannot be read, parsed, or validated.
+        """
         if not path.exists():
             raise RunReportError(f"Run report not found: {path}")
         payload = None

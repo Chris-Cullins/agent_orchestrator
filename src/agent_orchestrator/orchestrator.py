@@ -1,3 +1,24 @@
+"""
+Workflow orchestration engine for multi-step agent pipelines.
+
+This module provides the core orchestration logic for executing multi-step
+workflows that coordinate AI agents. The Orchestrator manages workflow
+execution, step dependencies, gating, loop-back iterations, notifications,
+and state persistence.
+
+Example:
+    >>> from agent_orchestrator.orchestrator import Orchestrator
+    >>> orchestrator = Orchestrator(
+    ...     workflow=workflow,
+    ...     workflow_root=workflow_dir,
+    ...     repo_dir=repo_path,
+    ...     report_reader=reader,
+    ...     state_persister=persister,
+    ...     runner=runner,
+    ... )
+    >>> orchestrator.run()
+"""
+
 from __future__ import annotations
 
 import json
@@ -24,6 +45,38 @@ from .state import RunStatePersister
 
 
 class Orchestrator:
+    """
+    Core workflow execution engine for coordinating multi-step agent pipelines.
+
+    The Orchestrator manages the complete lifecycle of a workflow run, including:
+    - Launching steps when their dependencies are satisfied
+    - Polling for step completion via run reports
+    - Handling retries, loop-backs, and manual approval gates
+    - Persisting state for resumption after failures
+    - Tracking costs and sending notifications
+
+    Attributes:
+        run_id: Unique identifier for the current workflow run.
+
+    Args:
+        workflow: The workflow definition containing steps to execute.
+        workflow_root: Directory containing workflow-related files.
+        repo_dir: Path to the target repository being processed.
+        report_reader: Reader for parsing agent run reports.
+        state_persister: Persister for saving/loading run state.
+        runner: Step runner for launching agent processes.
+        gate_evaluator: Evaluator for workflow gates. Defaults to always-open.
+        poll_interval: Seconds between polling iterations. Defaults to 1.0.
+        max_attempts: Maximum retry attempts per step. Defaults to 2.
+        max_iterations: Maximum loop-back iterations. Defaults to 4.
+        pause_for_human_input: Whether to pause for manual approval. Defaults to False.
+        logger: Logger instance. Defaults to module logger.
+        run_id: Optional run ID override. Auto-generated if not provided.
+        start_at_step: Optional step ID to resume from.
+        notification_service: Service for sending notifications. Defaults to null service.
+        daily_cost_limit: Optional daily spending limit in USD.
+        cost_limit_action: Action when limit reached: "warn", "pause", or "fail".
+    """
     def __init__(
         self,
         workflow: Workflow,
@@ -118,9 +171,21 @@ class Orchestrator:
 
     @property
     def run_id(self) -> str:
+        """Return the unique identifier for this workflow run."""
         return self._state.run_id
 
     def run(self) -> None:
+        """
+        Execute the workflow to completion.
+
+        Runs the main orchestration loop, launching steps as their dependencies
+        are satisfied, collecting run reports, handling retries and loop-backs,
+        and persisting state. The loop continues until all steps complete or
+        a terminal failure occurs.
+
+        Raises:
+            RuntimeError: If daily cost limit is exceeded and action is "fail".
+        """
         self._log.info(
             "workflow=%s run_id=%s repo=%s",
             self._workflow.name,
@@ -185,6 +250,12 @@ class Orchestrator:
             self._log_daily_summary()
 
     def _launch_ready_steps(self) -> bool:
+        """
+        Launch all steps whose dependencies are satisfied and gates are open.
+
+        Returns:
+            True if at least one step was launched, False otherwise.
+        """
         launched = False
         for step_id, step in self._workflow.steps.items():
             runtime = self._state.steps[step_id]
@@ -265,6 +336,16 @@ class Orchestrator:
         return launched
 
     def _collect_reports(self) -> bool:
+        """
+        Poll active step processes and collect completed run reports.
+
+        Checks each active process for completion, reads and validates run
+        reports, handles gate failures and loop-backs, applies memory updates,
+        and transitions steps to their next state.
+
+        Returns:
+            True if any step made progress, False otherwise.
+        """
         progressed = False
         to_remove = []
         for step_id, launch in list(self._active_processes.items()):
@@ -395,6 +476,12 @@ class Orchestrator:
         return progressed
 
     def _check_manual_steps(self) -> bool:
+        """
+        Check for manual input files that complete human-in-the-loop steps.
+
+        Returns:
+            True if any step transitioned from WAITING_ON_HUMAN to COMPLETED.
+        """
         if not self._pause_for_human:
             return False
 
@@ -413,6 +500,15 @@ class Orchestrator:
         return progressed
 
     def _dependencies_satisfied(self, step: Step) -> bool:
+        """
+        Check if all dependencies for a step are satisfied.
+
+        Args:
+            step: The step to check dependencies for.
+
+        Returns:
+            True if all dependency steps are COMPLETED or SKIPPED.
+        """
         if not all(
             self._state.steps[dep].status in {StepStatus.COMPLETED, StepStatus.SKIPPED}
             for dep in step.needs
@@ -431,6 +527,15 @@ class Orchestrator:
         return True
 
     def _gates_open(self, step: Step) -> bool:
+        """
+        Check if all gates for a step are open.
+
+        Args:
+            step: The step to check gates for.
+
+        Returns:
+            True if all gates evaluate to open, False otherwise.
+        """
         for gate in step.gates:
             if not self._gate_evaluator.evaluate(step, gate):
                 self._log.info("gate blocked step=%s gate=%s", step.id, gate)
@@ -483,6 +588,24 @@ class Orchestrator:
         return env
 
     def _resolve_prompt_path(self, prompt: str) -> Path:
+        """
+        Resolve the prompt file path, checking for local overrides.
+
+        Resolution order:
+        1. Absolute path if provided and exists
+        2. Local override in repo's .agents/prompts/ directory
+        3. Relative to workflow root
+        4. Relative to repository root
+
+        Args:
+            prompt: Path string from workflow step definition.
+
+        Returns:
+            Resolved absolute path to the prompt file.
+
+        Raises:
+            FileNotFoundError: If prompt file cannot be found.
+        """
         candidate = Path(prompt)
         if candidate.is_absolute() and candidate.exists():
             return candidate
@@ -542,7 +665,19 @@ class Orchestrator:
         )
 
     def _reset_steps_from(self, start_step: str, workflow: Workflow) -> None:
-        """Reset the specified step and all steps that depend on it (transitively)."""
+        """
+        Reset the specified step and all downstream dependents to PENDING.
+
+        Used when resuming a workflow from a specific step. Resets the target
+        step and all steps that transitively depend on it.
+
+        Args:
+            start_step: ID of the step to reset.
+            workflow: Workflow definition containing step graph.
+
+        Raises:
+            ValueError: If start_step is not found in the workflow.
+        """
         if start_step not in workflow.steps:
             raise ValueError(f"Step '{start_step}' not found in workflow")
 
@@ -562,7 +697,17 @@ class Orchestrator:
             self._log.info("Reset step=%s to PENDING", step_id)
 
     def _handle_loop_back(self, from_step: str, to_step: str) -> None:
-        """Handle loop-back from one step to another by resetting target and downstream steps."""
+        """
+        Handle loop-back from a failing step to an earlier step in the DAG.
+
+        Resets the target step and all intermediate steps, increments the
+        iteration counter, and requeues the source step to run again after
+        upstream steps complete.
+
+        Args:
+            from_step: ID of the step triggering the loop-back.
+            to_step: ID of the target step to loop back to.
+        """
         if to_step not in self._workflow.steps:
             self._log.error("Invalid loop_back_to target step=%s from step=%s", to_step, from_step)
             return
@@ -620,8 +765,20 @@ class Orchestrator:
                 self._log.info("Reset step=%s to PENDING for loop-back", step_id)
 
     def _initialize_loop_items(self, step: Step, runtime: StepRuntime) -> bool:
-        """Initialize loop items for a step if it has a loop configuration.
-        Returns True if initialization was successful, False if items are not yet available."""
+        """
+        Initialize loop items for a step with loop configuration.
+
+        Populates the runtime's loop_items from the configured source:
+        static items list, previous step's artifacts, or an artifact file.
+
+        Args:
+            step: The step with loop configuration.
+            runtime: The step's runtime state to initialize.
+
+        Returns:
+            True if loop items were successfully initialized or already set.
+            False if the item source is not yet available.
+        """
         if not step.loop:
             return True  # No loop, nothing to initialize
 
@@ -724,7 +881,17 @@ class Orchestrator:
         return False
 
     def _should_continue_loop(self, step: Step, runtime: StepRuntime) -> bool:
-        """Check if a loop should continue to the next iteration."""
+        """
+        Determine if a loop should continue to the next iteration.
+
+        Args:
+            step: The step with loop configuration.
+            runtime: The step's current runtime state.
+
+        Returns:
+            True if more iterations remain and limits not exceeded.
+            False if loop is complete or should terminate.
+        """
         if not step.loop or not runtime.loop_items:
             return False
 
@@ -745,7 +912,19 @@ class Orchestrator:
         return True
 
     def _get_loop_context_env(self, step: Step, runtime: StepRuntime) -> Dict[str, str]:
-        """Get environment variables for the current loop iteration."""
+        """
+        Build environment variables for the current loop iteration.
+
+        Creates LOOP_<INDEX_VAR> and LOOP_<ITEM_VAR> environment variables
+        containing the current iteration index and item value.
+
+        Args:
+            step: The step with loop configuration.
+            runtime: The step's current runtime state.
+
+        Returns:
+            Dictionary of environment variables for the loop context.
+        """
         if not step.loop or not runtime.loop_items:
             return {}
 
@@ -763,7 +942,16 @@ class Orchestrator:
     def _apply_memory_updates(
         self, step_id: str, memory_updates: list
     ) -> None:
-        """Apply memory updates from a completed step to AGENTS.md files."""
+        """
+        Apply memory updates from a completed step to AGENTS.md files.
+
+        Converts run report memory updates to MemoryUpdate objects and
+        delegates to the MemoryManager for persistence.
+
+        Args:
+            step_id: ID of the step that produced the memory updates.
+            memory_updates: List of memory update dictionaries from run report.
+        """
         from .memory import MemoryUpdate as MemoryUpdateModel
 
         updates = []
@@ -787,21 +975,25 @@ class Orchestrator:
             )
 
     def _persist_state(self) -> None:
+        """Persist current run state to disk for resumption."""
         self._state_persister.save(self._state)
 
     def _all_steps_finished(self) -> bool:
+        """Check if all workflow steps have reached a terminal state."""
         return all(
             runtime.status in {StepStatus.COMPLETED, StepStatus.SKIPPED}
             for runtime in self._state.steps.values()
         )
 
     def _has_terminal_failure(self) -> bool:
+        """Check if any step has failed and exhausted all retry attempts."""
         return any(
             runtime.status == StepStatus.FAILED and runtime.attempts >= self._max_attempts
             for runtime in self._state.steps.values()
         )
 
     def _cleanup_processes(self) -> None:
+        """Terminate any running step processes and close log handles."""
         for launch in self._active_processes.values():
             if launch.process.poll() is None:
                 launch.process.terminate()
@@ -809,6 +1001,7 @@ class Orchestrator:
         self._active_processes.clear()
 
     def _start_notifications(self) -> None:
+        """Initialize the notification service with run context."""
         try:
             context = RunContext(
                 run_id=self._state.run_id,
@@ -822,6 +1015,7 @@ class Orchestrator:
             )
 
     def _stop_notifications(self) -> None:
+        """Shut down the notification service."""
         try:
             self._notifications.stop()
         except Exception:  # pragma: no cover - defensive logging
@@ -835,6 +1029,17 @@ class Orchestrator:
         runtime: StepRuntime,
         trigger: str,
     ) -> StepNotification:
+        """
+        Build a notification payload for a step event.
+
+        Args:
+            step_id: ID of the step generating the notification.
+            runtime: Current runtime state of the step.
+            trigger: Event type triggering the notification (e.g., "failure").
+
+        Returns:
+            Structured notification payload for the notification service.
+        """
         return StepNotification(
             run_id=self._state.run_id,
             workflow_name=self._workflow.name,
@@ -849,6 +1054,7 @@ class Orchestrator:
         )
 
     def _notify_failure(self, step_id: str, runtime: StepRuntime) -> None:
+        """Send a failure notification for a step if not already sent."""
         if runtime.notified_failure or runtime.status != StepStatus.FAILED:
             return
         notification = self._build_step_notification(step_id, runtime, trigger="failure")
@@ -859,6 +1065,7 @@ class Orchestrator:
             self._log.exception("failed to dispatch failure notification step=%s", step_id)
 
     def _notify_human_input(self, step_id: str, runtime: StepRuntime) -> None:
+        """Send a human-input-required notification for a step if not already sent."""
         if runtime.notified_human_input or runtime.status != StepStatus.WAITING_ON_HUMAN:
             return
         notification = self._build_step_notification(step_id, runtime, trigger="human_input")
@@ -869,7 +1076,17 @@ class Orchestrator:
             self._log.exception("failed to dispatch human-input notification step=%s", step_id)
 
     def _check_cost_limit_reached(self) -> bool:
-        """Check if daily cost limit has been reached and handle accordingly."""
+        """
+        Check if daily cost limit has been reached and handle accordingly.
+
+        Behavior depends on cost_limit_action:
+        - "warn": Log warning and continue execution
+        - "pause": Stop launching new steps and notify
+        - "fail": Mark pending steps as failed
+
+        Returns:
+            True if execution should stop due to cost limit, False otherwise.
+        """
         if not self._daily_cost_limit or self._cost_limit_reached:
             return self._cost_limit_reached
 
@@ -907,7 +1124,13 @@ class Orchestrator:
         return False
 
     def _notify_cost_limit(self, current_cost: float, limit: float) -> None:
-        """Send notification about cost limit being reached."""
+        """
+        Send notification about cost limit being reached.
+
+        Args:
+            current_cost: Current daily spending in USD.
+            limit: Configured daily limit in USD.
+        """
         try:
             # Use existing notification infrastructure
             self._log.info(
@@ -920,7 +1143,7 @@ class Orchestrator:
             self._log.exception("failed to send cost limit notification")
 
     def _log_daily_summary(self) -> None:
-        """Log a summary of daily statistics."""
+        """Log a summary of daily statistics including runs, steps, and costs."""
         try:
             stats = self._daily_stats.get_daily_stats()
             self._log.info(
@@ -942,6 +1165,23 @@ def build_default_runner(
     logs_dir: Optional[Path] = None,
     workdir: Optional[Path] = None,
 ) -> StepRunner:
+    """
+    Build a StepRunner with the default execution template.
+
+    Creates a runner configured to launch agents via a Python wrapper script
+    using a standard command-line interface.
+
+    Args:
+        repo_dir: Path to the target repository.
+        wrapper: Path to the wrapper script for launching agents.
+        default_env: Environment variables to inject into all step processes.
+        default_args: Additional arguments to append to all commands.
+        logs_dir: Directory for agent log files. Defaults to .agents/logs.
+        workdir: Working directory for agent processes. Defaults to repo_dir.
+
+    Returns:
+        Configured StepRunner instance ready for use.
+    """
     template = ExecutionTemplate(
         "{python} {wrapper} --run-id {run_id} --step-id {step_id} --agent {agent} "
         "--prompt {prompt} --repo {repo} --report {report}"
