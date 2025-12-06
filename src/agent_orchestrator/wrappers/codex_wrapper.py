@@ -25,6 +25,27 @@ from agent_orchestrator.run_report_format import (
 )
 
 
+# Status normalization mapping: prompts use "success"/"failed" but orchestrator expects "COMPLETED"/"FAILED"
+_STATUS_ALIASES = {
+    "SUCCESS": "COMPLETED",
+    "OK": "COMPLETED",
+    "DONE": "COMPLETED",
+    "PASSED": "COMPLETED",
+    "FAIL": "FAILED",
+    "ERROR": "FAILED",
+}
+
+
+def normalize_status(status: str) -> str:
+    """Normalize agent-reported status to orchestrator-expected values.
+
+    Agents may report status as 'success' or 'failed' (per prompts),
+    but the orchestrator expects 'COMPLETED' or 'FAILED'.
+    """
+    upper = str(status).upper()
+    return _STATUS_ALIASES.get(upper, upper)
+
+
 def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, list[str]]:
     parser = argparse.ArgumentParser(
         description="Wrapper that adapts orchestrator interface to real codex exec."
@@ -285,7 +306,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     metrics = report_payload.setdefault("metrics", {})
     metrics.setdefault("duration_ms", duration_ms)
-    report_payload["status"] = str(report_payload.get("status", "COMPLETED")).upper()
+    report_payload["status"] = normalize_status(report_payload.get("status", "COMPLETED"))
 
     try:
         report_payload = normalize_run_report_payload(report_payload)

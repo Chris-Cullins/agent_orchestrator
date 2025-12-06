@@ -7,6 +7,27 @@ from typing import Optional
 
 from .models import MemoryUpdate, RunReport
 
+
+# Status normalization mapping: prompts use "success"/"failed" but orchestrator expects "COMPLETED"/"FAILED"
+_STATUS_ALIASES = {
+    "SUCCESS": "COMPLETED",
+    "OK": "COMPLETED",
+    "DONE": "COMPLETED",
+    "PASSED": "COMPLETED",
+    "FAIL": "FAILED",
+    "ERROR": "FAILED",
+}
+
+
+def normalize_status(status: str) -> str:
+    """Normalize agent-reported status to orchestrator-expected values.
+
+    Agents may report status as 'success' or 'failed' (per prompts),
+    but the orchestrator expects 'COMPLETED' or 'FAILED'.
+    """
+    upper = str(status).upper()
+    return _STATUS_ALIASES.get(upper, upper)
+
 try:
     from jsonschema import Draft202012Validator
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
@@ -97,7 +118,7 @@ class RunReportReader:
             run_id=str(payload["run_id"]),
             step_id=str(payload["step_id"]),
             agent=str(payload["agent"]),
-            status=str(payload["status"]).upper(),
+            status=normalize_status(payload["status"]),
             started_at=str(payload["started_at"]),
             ended_at=str(payload["ended_at"]),
             artifacts=list(payload.get("artifacts", [])),
