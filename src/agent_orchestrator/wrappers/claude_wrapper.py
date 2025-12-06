@@ -27,6 +27,27 @@ from agent_orchestrator.run_report_format import (
 from agent_orchestrator.daily_stats import calculate_cost, DailyStatsTracker
 
 
+# Status normalization mapping: prompts use "success"/"failed" but orchestrator expects "COMPLETED"/"FAILED"
+_STATUS_ALIASES = {
+    "SUCCESS": "COMPLETED",
+    "OK": "COMPLETED",
+    "DONE": "COMPLETED",
+    "PASSED": "COMPLETED",
+    "FAIL": "FAILED",
+    "ERROR": "FAILED",
+}
+
+
+def normalize_status(status: str) -> str:
+    """Normalize agent-reported status to orchestrator-expected values.
+
+    Agents may report status as 'success' or 'failed' (per prompts),
+    but the orchestrator expects 'COMPLETED' or 'FAILED'.
+    """
+    upper = str(status).upper()
+    return _STATUS_ALIASES.get(upper, upper)
+
+
 def parse_args(argv: Optional[list[str]] = None) -> Tuple[argparse.Namespace, list[str]]:
     parser = argparse.ArgumentParser(
         description="Wrapper that adapts orchestrator interface to Claude CLI."
@@ -413,6 +434,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     metrics = report_payload.setdefault("metrics", {})
     metrics.setdefault("duration_ms", duration_ms)
+    
     # Add token and cost metrics
     metrics["input_tokens"] = token_usage["input_tokens"]
     metrics["output_tokens"] = token_usage["output_tokens"]
@@ -428,7 +450,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     metrics["cost_usd"] = round(step_cost, 6)
     metrics["cost_source"] = "claude_cli" if token_usage.get("cost_usd") is not None else "estimated"
     metrics["model"] = model
-    report_payload["status"] = str(report_payload.get("status", "COMPLETED")).upper()
+    report_payload["status"] = normalize_status(report_payload.get("status", "COMPLETED"))
 
     # Record to daily stats tracker
     try:
