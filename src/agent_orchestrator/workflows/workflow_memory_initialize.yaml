@@ -1,0 +1,11 @@
+name: memory_initialize
+description: Bootstrap the AGENTS.md memory system for a new repository
+
+steps:
+  - id: initialize
+    agent: memory-initializer
+    prompt: ../prompts/memory_initialize.md
+    needs: []
+    metadata:
+      purpose: "Create initial AGENTS.md files throughout the repository"
+      usage: "Run once when onboarding a new repo to the orchestrator"

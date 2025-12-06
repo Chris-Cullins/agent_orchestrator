@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from .models import RunReport
+from .models import MemoryUpdate, RunReport
 
 try:
     from jsonschema import Draft202012Validator
@@ -80,6 +80,18 @@ class RunReportReader:
         if missing:
             raise RunReportError(f"Run report {path} missing fields: {', '.join(missing)}")
 
+        # Parse memory_updates if present
+        memory_updates = []
+        for item in payload.get("memory_updates", []):
+            if isinstance(item, dict):
+                memory_updates.append(
+                    MemoryUpdate(
+                        scope=str(item.get("scope", ".")),
+                        section=str(item.get("section", "Notes")),
+                        entry=str(item.get("entry", "")),
+                    )
+                )
+
         return RunReport(
             schema=str(payload["schema"]),
             run_id=str(payload["run_id"]),
@@ -93,5 +105,6 @@ class RunReportReader:
             logs=list(payload.get("logs", [])),
             next_suggested_steps=list(payload.get("next_suggested_steps", [])),
             gate_failure=bool(payload.get("gate_failure", False)),
+            memory_updates=memory_updates,
             raw=payload,
         )

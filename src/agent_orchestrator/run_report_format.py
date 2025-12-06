@@ -60,7 +60,8 @@ following format:
   "logs": [
     "<REPLACE WITH A SHORT SUMMARY OF WHAT YOU ACCOMPLISHED, e.g., Documented architecture misalignments in backlog/architecture_alignment.md>"
   ],
-  "next_suggested_steps": []
+  "next_suggested_steps": [],
+  "memory_updates": []
 }}
 {RUN_REPORT_END}
 
@@ -75,6 +76,49 @@ Guidelines:
   Never leave instructional text in your report.
 - The orchestrator will reject run reports that retain placeholder content in
   the artifacts, logs, or ended_at fields, or that omit log entries entirely.
+"""
+    )
+
+
+def build_memory_update_instructions() -> str:
+    """Return guidance for agents on how to emit memory updates."""
+
+    return dedent(
+        """
+## Memory Updates (Use Sparingly)
+
+Only record knowledge that would take significant time to rediscover. Memory updates
+persist in AGENTS.md files and are injected into future agent prompts.
+
+**BEFORE ADDING A MEMORY UPDATE, ASK:**
+1. Would this take >5 minutes to figure out from the code? If no, skip it.
+2. Is this a foot-gun that could cause a subtle bug? If yes, record it.
+3. Is this a "why" that isn't obvious from the "what"? If yes, record it.
+4. Could an agent discover this by reading the relevant file? If yes, skip it.
+
+**HIGH-VALUE (record these):**
+- Foot-guns: "UserService.save() doesn't flush by default - call .flush() explicitly"
+- Non-obvious behavior: "Cron jobs run in UTC, not server-local time"
+- Why decisions: "We vendor this dep because upstream has breaking changes monthly"
+- Workarounds: "Node 18 requires --legacy-peer-deps for clean install"
+- Test quirks: "Integration tests need running Redis; unit tests mock it"
+- Cross-cutting: "All exceptions must inherit AppError for proper logging"
+
+**LOW-VALUE (never record these):**
+- What files/functions exist (use ls, grep)
+- What code does (read the code)
+- Line numbers (they change)
+- Standard patterns any developer knows
+- Anything in README or existing docs
+
+Format:
+```json
+"memory_updates": [
+  {"scope": "src/api", "section": "Gotchas", "entry": "Rate limiter resets at UTC midnight"}
+]
+```
+
+When in doubt, leave it out. Less is more.
 """
     )
 

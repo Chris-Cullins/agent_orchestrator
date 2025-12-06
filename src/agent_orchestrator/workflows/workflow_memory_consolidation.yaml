@@ -1,0 +1,11 @@
+name: memory_consolidation
+description: Periodic maintenance workflow to consolidate and clean up AGENTS.md memory files
+
+steps:
+  - id: consolidate
+    agent: memory-consolidator
+    prompt: ../prompts/memory_consolidation.md
+    needs: []
+    metadata:
+      purpose: "Clean up and consolidate repository memory files"
+      recommended_frequency: "weekly or after major changes"

@@ -13,11 +13,13 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from agent_orchestrator.memory import MemoryManager
 from agent_orchestrator.models import utc_now
 from agent_orchestrator.run_report_format import (
     RUN_REPORT_END,
     RUN_REPORT_START,
     PlaceholderContentError,
+    build_memory_update_instructions,
     build_run_report_instructions,
     normalize_run_report_payload,
 )
@@ -70,7 +72,13 @@ def build_codex_command(
 
     # Replace {run_id} placeholder with actual run_id
     prompt_content = prompt_content.replace("{run_id}", args.run_id)
-    
+
+    # Read repository memories
+    repo_path = Path(args.repo)
+    memory_manager = MemoryManager(repo_dir=repo_path)
+    memory_context = memory_manager.read_memories(repo_path)
+    memory_section = memory_context.to_prompt_section()
+
     # Enhance the prompt with context about the task
     enhanced_prompt = f"""You are an AI agent named "{args.agent}" working on a software development task.
 
@@ -78,10 +86,14 @@ Repository: {args.repo}
 Run ID: {args.run_id}
 Step ID: {args.step_id}
 
+{memory_section}
+
 Your task instructions:
 {prompt_content}
 
 {build_run_report_instructions(args.run_id, args.step_id, args.agent, started_at)}
+
+{build_memory_update_instructions()}
 
 Please proceed with the task and ensure you include the run report at the end.
 """
