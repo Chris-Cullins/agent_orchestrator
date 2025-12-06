@@ -63,6 +63,15 @@ class Workflow:
 
 
 @dataclass
+class MemoryUpdate:
+    """A single memory update to be written to an AGENTS.md file."""
+
+    scope: str  # relative path to target directory (e.g., "src/api" or ".")
+    section: str  # section name (e.g., "Gotchas", "Patterns")
+    entry: str  # the content to add
+
+
+@dataclass
 class RunReport:
     schema: str
     run_id: str
@@ -76,6 +85,7 @@ class RunReport:
     logs: List[str] = field(default_factory=list)
     next_suggested_steps: List[str] = field(default_factory=list)
     gate_failure: bool = False
+    memory_updates: List[MemoryUpdate] = field(default_factory=list)
     raw: Dict[str, object] = field(default_factory=dict)
 
 

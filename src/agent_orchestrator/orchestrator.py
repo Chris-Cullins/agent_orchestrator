@@ -8,7 +8,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .gating import GateEvaluator, AlwaysOpenGateEvaluator, CompositeGateEvaluator
+from .gating import AlwaysOpenGateEvaluator, CompositeGateEvaluator, GateEvaluator
+from .memory import MemoryManager
 from .models import RunState, Step, StepRuntime, StepStatus, Workflow, utc_now
 from .notifications import (
     NotificationService,
@@ -104,6 +105,7 @@ class Orchestrator:
             )
 
         self._active_processes: Dict[str, StepLaunch] = {}
+        self._memory_manager = MemoryManager(repo_dir=repo_dir, logger=self._log)
 
     @property
     def run_id(self) -> str:
@@ -277,6 +279,10 @@ class Orchestrator:
                         continue
 
                 if report.status == "COMPLETED":
+                    # Apply memory updates from the report
+                    if report.memory_updates:
+                        self._apply_memory_updates(step_id, report.memory_updates)
+
                     # Check if this is a looping step that needs to continue
                     if step.loop and self._should_continue_loop(step, runtime):
                         # Advance to next loop iteration
@@ -710,6 +716,32 @@ class Orchestrator:
         }
 
         return env
+
+    def _apply_memory_updates(
+        self, step_id: str, memory_updates: list
+    ) -> None:
+        """Apply memory updates from a completed step to AGENTS.md files."""
+        from .memory import MemoryUpdate as MemoryUpdateModel
+
+        updates = []
+        for update in memory_updates:
+            if hasattr(update, "scope"):
+                updates.append(
+                    MemoryUpdateModel(
+                        scope=update.scope,
+                        section=update.section,
+                        entry=update.entry,
+                    )
+                )
+
+        if updates:
+            count = self._memory_manager.apply_updates(updates)
+            self._log.info(
+                "Applied %d/%d memory updates from step=%s",
+                count,
+                len(updates),
+                step_id,
+            )
 
     def _persist_state(self) -> None:
         self._state_persister.save(self._state)
