@@ -12,5 +12,3 @@
 - Step IDs are used as filesystem paths - avoid special characters
 - Local prompt overrides: place file at `.agents/prompts/<filename>` in target repo
 - Codex wrapper uses positional prompt arg; Claude wrapper uses stdin (`--print` mode)
-- Custom binary paths: `CODEX_EXEC_BIN` / `CLAUDE_CLI_BIN` env vars or `--*-bin` flags
-- Wrappers default to 1-hour timeout (`--timeout` flag to override)

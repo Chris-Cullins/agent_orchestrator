@@ -7,6 +7,10 @@
             <h1 class="page-title">
                 <a href="/runs" style="color: var(--text-secondary);">Runs</a> /
                 <span class="run-id">{{ run_id[:8] }}</span>
+                {% if actual_run_id and actual_run_id != run_id %}
+                <span style="color: var(--text-muted);">&rarr;</span>
+                <a href="/runs/{{ actual_run_id }}" class="run-id" style="color: var(--accent-blue);">{{ actual_run_id }}</a>
+                {% endif %}
                 <span id="status-badge" class="status status-running">
                     <span id="status-emoji">&#x23F3;</span>
                     <span id="status-text">{{ 'RUNNING' if is_active else (run_info.status if run_info else 'UNKNOWN') }}</span>
@@ -24,7 +28,7 @@
             <button id="stop-btn" class="btn btn-secondary" {% if not is_active %}disabled{% endif %}>
                 Stop Run
             </button>
-            <a href="/runs/{{ run_id }}" class="btn btn-secondary">View Details</a>
+            <a href="/runs/{{ actual_run_id or run_id }}" class="btn btn-secondary">View Details</a>
             <a href="/runs/new" class="btn btn-primary">New Run</a>
         </div>
     </div>

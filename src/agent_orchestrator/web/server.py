@@ -174,9 +174,20 @@ def create_app(repo_dir: Path) -> FastAPI:
         is_active = run_id in _active_runs
         run_info = None
         steps = []
+        actual_run_id = None
 
-        if not is_active:
-            # Try to get info from stats
+        # Check if this is a web tracking ID and find the actual orchestrator run_id
+        web_log_path = repo_dir / ".agents" / "web_runs" / f"{run_id}.log"
+        if web_log_path.exists():
+            actual_run_id = extract_run_id_from_log(web_log_path)
+            if actual_run_id and actual_run_id != run_id:
+                # Get info for the actual run
+                run_info = get_run_info(tracker, actual_run_id)
+                if run_info:
+                    steps = get_run_steps(repo_dir, actual_run_id, tracker)
+
+        if not run_info and not is_active:
+            # Try to get info from stats using the provided run_id
             run_info = get_run_info(tracker, run_id)
             if run_info:
                 steps = get_run_steps(repo_dir, run_id, tracker)
@@ -186,6 +197,7 @@ def create_app(repo_dir: Path) -> FastAPI:
             {
                 "request": request,
                 "run_id": run_id,
+                "actual_run_id": actual_run_id,
                 "is_active": is_active,
                 "run_info": run_info,
                 "steps": steps,
@@ -468,6 +480,21 @@ def create_app(repo_dir: Path) -> FastAPI:
             return {"success": False, "error": str(e)}
 
     return app
+
+
+def extract_run_id_from_log(log_path: Path) -> Optional[str]:
+    """Extract the actual orchestrator run_id from a web run log file."""
+    import re
+    try:
+        with open(log_path, "r") as f:
+            content = f.read(2000)  # Read first 2KB
+            # Look for pattern like "run_id=e2bb995e"
+            match = re.search(r"run_id=([a-f0-9]{8})", content)
+            if match:
+                return match.group(1)
+    except Exception:
+        pass
+    return None
 
 
 def discover_workflows(repo_dir: Path) -> List[Dict[str, Any]]:
