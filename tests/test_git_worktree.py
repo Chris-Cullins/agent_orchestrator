@@ -88,6 +88,7 @@ class GitWorktreeCleanupTests(unittest.TestCase):
                 wrapper_arg=[],
                 issue_number=None,
                 start_at_step=None,
+                skip_cleanup=True,
                 poll_interval=0.01,
                 max_attempts=1,
                 max_iterations=1,
