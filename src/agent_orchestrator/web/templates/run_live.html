@@ -7,13 +7,17 @@
             <h1 class="page-title">
                 <a href="/runs" style="color: var(--text-secondary);">Runs</a> /
                 <span class="run-id">{{ run_id[:8] }}</span>
+                <span id="actual-run-id-container">
                 {% if actual_run_id and actual_run_id != run_id %}
                 <span style="color: var(--text-muted);">&rarr;</span>
-                <a href="/runs/{{ actual_run_id }}" class="run-id" style="color: var(--accent-blue);">{{ actual_run_id }}</a>
+                <a href="/runs/{{ actual_run_id }}" class="run-id" style="color: var(--accent-blue);" id="actual-run-link">{{ actual_run_id }}</a>
+                {% else %}
+                <span id="loading-run-id" style="color: var(--text-muted);"> (starting...)</span>
                 {% endif %}
+                </span>
                 <span id="status-badge" class="status status-running">
                     <span id="status-emoji">&#x23F3;</span>
-                    <span id="status-text">{{ 'RUNNING' if is_active else (run_info.status if run_info else 'UNKNOWN') }}</span>
+                    <span id="status-text">{{ 'RUNNING' if is_active else (run_info.status if run_info else 'STARTING') }}</span>
                 </span>
             </h1>
             <p class="page-subtitle">
@@ -28,7 +32,7 @@
             <button id="stop-btn" class="btn btn-secondary" {% if not is_active %}disabled{% endif %}>
                 Stop Run
             </button>
-            <a href="/runs/{{ actual_run_id or run_id }}" class="btn btn-secondary">View Details</a>
+            <a href="/runs/{{ actual_run_id or run_id }}" class="btn btn-secondary" id="view-details-btn">View Details</a>
             <a href="/runs/new" class="btn btn-primary">New Run</a>
         </div>
     </div>
@@ -283,6 +287,46 @@ document.addEventListener('DOMContentLoaded', function() {
     let startTime = new Date();
     let eventSource = null;
     let isComplete = false;
+    let actualRunId = '{{ actual_run_id or "" }}';
+    let runIdPollingInterval = null;
+
+    // Poll for actual run ID (orchestrator generates different ID than web tracking ID)
+    function pollForActualRunId() {
+        if (actualRunId && actualRunId !== runId) {
+            // Already have actual run ID
+            return;
+        }
+
+        runIdPollingInterval = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/runs/${runId}/status`);
+                const data = await response.json();
+
+                if (data.actual_run_id && data.actual_run_id !== runId) {
+                    actualRunId = data.actual_run_id;
+
+                    // Update the run ID display
+                    const container = document.getElementById('actual-run-id-container');
+                    container.innerHTML = `
+                        <span style="color: var(--text-muted);">&rarr;</span>
+                        <a href="/runs/${actualRunId}" class="run-id" style="color: var(--accent-blue);" id="actual-run-link">${actualRunId}</a>
+                    `;
+
+                    // Update View Details button
+                    const viewDetailsBtn = document.getElementById('view-details-btn');
+                    if (viewDetailsBtn) {
+                        viewDetailsBtn.href = `/runs/${actualRunId}`;
+                    }
+
+                    // Stop polling
+                    clearInterval(runIdPollingInterval);
+                    runIdPollingInterval = null;
+                }
+            } catch (e) {
+                console.error('Failed to poll for run ID:', e);
+            }
+        }, 1000); // Poll every second
+    }
 
     // Update elapsed time
     function updateElapsedTime() {
@@ -390,6 +434,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start connection
     {% if is_active %}
     connect();
+    pollForActualRunId();  // Start polling for actual run ID
     {% else %}
     isComplete = true;
     cursor.classList.add('hidden');
@@ -453,6 +498,9 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('beforeunload', function() {
         if (eventSource) {
             eventSource.close();
+        }
+        if (runIdPollingInterval) {
+            clearInterval(runIdPollingInterval);
         }
     });
 });

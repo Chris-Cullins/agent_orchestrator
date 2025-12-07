@@ -374,6 +374,14 @@ def create_app(repo_dir: Path) -> FastAPI:
     @app.get("/api/runs/{run_id}/status")
     async def api_run_status(run_id: str):
         """Get status of an active run."""
+        repo_dir: Path = app.state.repo_dir
+        actual_run_id = None
+
+        # Check if this is a web tracking ID and extract actual run ID
+        web_log_path = repo_dir / ".agents" / "web_runs" / f"{run_id}.log"
+        if web_log_path.exists():
+            actual_run_id = extract_run_id_from_log(web_log_path)
+
         if run_id in _active_runs:
             active = _active_runs[run_id]
             poll = active.process.poll()
@@ -382,11 +390,12 @@ def create_app(repo_dir: Path) -> FastAPI:
                 "running": poll is None,
                 "exit_code": poll,
                 "started_at": active.started_at,
+                "actual_run_id": actual_run_id,
             }
 
         # Check if run exists in stats
         tracker: DailyStatsTracker = app.state.stats_tracker
-        run_info = get_run_info(tracker, run_id)
+        run_info = get_run_info(tracker, actual_run_id or run_id)
         if run_info:
             return {
                 "active": False,
@@ -394,9 +403,10 @@ def create_app(repo_dir: Path) -> FastAPI:
                 "status": run_info.get("status", "UNKNOWN"),
                 "started_at": run_info.get("started_at"),
                 "ended_at": run_info.get("ended_at"),
+                "actual_run_id": actual_run_id,
             }
 
-        return {"error": "Run not found"}
+        return {"error": "Run not found", "actual_run_id": actual_run_id}
 
     @app.get("/api/runs/{run_id}/stream")
     async def api_run_stream(run_id: str):
