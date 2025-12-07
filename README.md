@@ -1104,7 +1104,126 @@ python -m agent_orchestrator.cli run \
 - A typical workflow with tiered models can save 50-70% overall
 - Review `workflow_code_review_loop.yaml` for a working example
 
-### Step 9: Monitoring and Debugging
+### Step 9: Web Dashboard
+
+The orchestrator includes a web-based dashboard for monitoring runs, viewing analytics, and starting new workflow runs directly from a browser.
+
+#### Starting the Web Dashboard
+
+```bash
+# Start the dashboard on default port (8080)
+python -m agent_orchestrator.cli web --repo /path/to/your/project
+
+# Start on a custom port
+python -m agent_orchestrator.cli web --repo /path/to/your/project --port 3000
+
+# Start without auto-opening browser
+python -m agent_orchestrator.cli web --repo /path/to/your/project --no-browser
+
+# Bind to all interfaces (for remote access)
+python -m agent_orchestrator.cli web --repo /path/to/your/project --host 0.0.0.0
+```
+
+#### Dashboard Features
+
+**Home Dashboard (`/`)**
+- Today's run statistics (total runs, steps, cost, tokens)
+- Recent runs with status and quick actions
+- Cost breakdown by model (Opus, Sonnet, Haiku)
+- Token usage overview
+
+**Analytics (`/analytics`)**
+- Historical cost tracking (7/14/30 day views)
+- Daily cost charts
+- Token usage trends
+- Cost by step breakdown
+- Runs per day visualization
+
+**Run Explorer (`/runs`)**
+- Browse all runs with filtering by time range
+- View run status, workflow, cost, and step counts
+- Quick links to run details and live view
+
+**Run Details (`/runs/{run_id}`)**
+- Detailed run information and metrics
+- Step-by-step timeline with status indicators
+- Cost and token breakdown per step
+- Duration tracking
+
+**Start New Run (`/runs/new`)**
+- Form-based workflow configuration
+- Workflow selection from available YAML files
+- Wrapper selection (Claude, Codex, etc.)
+- Run options:
+  - Issue number input
+  - Git worktree isolation
+  - Cost limits and actions
+  - Max attempts and iterations
+  - Environment variables
+  - Resume from specific step
+
+**Live Run View (`/runs/{run_id}/live`)**
+- Real-time output streaming via Server-Sent Events (SSE)
+- Terminal-style log display with syntax highlighting
+- Auto-scroll option
+- Stop run functionality
+- Elapsed time and line count tracking
+- Resume failed runs from specific steps
+
+#### API Endpoints
+
+The dashboard exposes REST API endpoints for programmatic access:
+
+```bash
+# List available workflows
+curl http://localhost:8080/api/workflows
+
+# List available wrappers
+curl http://localhost:8080/api/wrappers
+
+# Get workflow steps (for resume selection)
+curl http://localhost:8080/api/workflow/workflows/workflow_github_issue.yaml/steps
+
+# Start a new run
+curl -X POST http://localhost:8080/api/runs/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflow": "workflows/workflow_github_issue.yaml",
+    "wrapper": "wrappers/claude_wrapper.py",
+    "issue_number": "42",
+    "git_worktree": true
+  }'
+
+# Get run status
+curl http://localhost:8080/api/runs/{run_id}/status
+
+# Stream run output (SSE)
+curl http://localhost:8080/api/runs/{run_id}/stream
+
+# Stop a running workflow
+curl -X POST http://localhost:8080/api/runs/{run_id}/stop
+
+# Get today's stats
+curl http://localhost:8080/api/stats/today
+
+# Get stats for date range
+curl http://localhost:8080/api/stats/range?days=7
+
+# Get all runs
+curl http://localhost:8080/api/runs?days=7
+```
+
+#### Requirements
+
+The web dashboard requires additional dependencies:
+
+```bash
+pip install fastapi uvicorn jinja2
+```
+
+These are included in `requirements.txt` but can be installed separately if needed.
+
+### Step 10: Monitoring and Debugging
 
 #### View Execution Status
 ```bash

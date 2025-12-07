@@ -1,9 +1,15 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="page-header">
-    <h1 class="page-title">Dashboard</h1>
-    <p class="page-subtitle">Today's overview - {{ stats.date }}</p>
+<div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Today's overview - {{ stats.date }}</p>
+    </div>
+    <div class="quick-actions">
+        <a href="/runs/new" class="btn btn-primary">+ New Run</a>
+        <a href="/runs/new?preset=issue" class="btn btn-secondary">Run with Issue</a>
+    </div>
 </div>
 
 <!-- Stats cards -->
@@ -43,6 +49,7 @@
                         <th>Status</th>
                         <th>Cost</th>
                         <th>Steps</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -64,6 +71,12 @@
                             <span style="color: var(--accent-red);">{{ run.steps_failed }}</span>
                             {% else %}
                             {{ run.steps_completed }}
+                            {% endif %}
+                        </td>
+                        <td class="actions-cell">
+                            <a href="/runs/{{ run.run_id }}/live" class="btn-action" title="Live View">&#x1F4FA;</a>
+                            {% if run.status == 'FAILED' %}
+                            <a href="/runs/{{ run.run_id }}/live#resume" class="btn-action btn-resume" title="Resume">&#x21BB;</a>
                             {% endif %}
                         </td>
                     </tr>

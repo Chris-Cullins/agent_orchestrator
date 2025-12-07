@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Start New Run</h1>
+    <p class="page-subtitle">Configure and launch a new workflow run</p>
+</div>
+
+<form id="new-run-form" class="card">
+    <div class="form-section">
+        <h2 class="card-title">Workflow Configuration</h2>
+
+        <div class="form-group">
+            <label for="workflow">Workflow</label>
+            <select id="workflow" name="workflow" required>
+                <option value="">Select a workflow...</option>
+                {% for wf in workflows %}
+                <option value="{{ wf.path }}" data-description="{{ wf.description }}" data-steps="{{ wf.step_count }}">
+                    {{ wf.name }} ({{ wf.step_count }} steps)
+                </option>
+                {% endfor %}
+            </select>
+            <div id="workflow-description" class="form-help"></div>
+        </div>
+
+        <div class="form-group">
+            <label for="wrapper">Wrapper</label>
+            <select id="wrapper" name="wrapper" required>
+                <option value="">Select a wrapper...</option>
+                {% for wp in wrappers %}
+                <option value="{{ wp.path }}">{{ wp.name }}</option>
+                {% endfor %}
+            </select>
+            <div class="form-help">The execution wrapper determines which agent framework to use (Claude, Codex, etc.)</div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h2 class="card-title">Run Options</h2>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="issue-number">Issue Number</label>
+                <input type="text" id="issue-number" name="issue_number" placeholder="e.g., 42">
+                <div class="form-help">GitHub issue number to process (sets ISSUE_NUMBER env var)</div>
+            </div>
+
+            <div class="form-group">
+                <label for="repo">Target Repository</label>
+                <input type="text" id="repo" name="repo" placeholder="{{ repo_dir }}">
+                <div class="form-help">Leave empty to use current repository</div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="max-attempts">Max Attempts</label>
+                <input type="number" id="max-attempts" name="max_attempts" value="2" min="1" max="10">
+                <div class="form-help">Max attempts per step before marking failed</div>
+            </div>
+
+            <div class="form-group">
+                <label for="max-iterations">Max Iterations</label>
+                <input type="number" id="max-iterations" name="max_iterations" value="4" min="1" max="20">
+                <div class="form-help">Max loop-back iterations before marking failed</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h2 class="card-title">Git Worktree</h2>
+
+        <div class="form-group checkbox-group">
+            <label>
+                <input type="checkbox" id="git-worktree" name="git_worktree">
+                Create isolated git worktree for this run
+            </label>
+            <div class="form-help">Runs in an isolated worktree branch to avoid conflicts</div>
+        </div>
+
+        <div class="form-group" id="worktree-branch-group" style="display: none;">
+            <label for="git-worktree-branch">Branch Name</label>
+            <input type="text" id="git-worktree-branch" name="git_worktree_branch" placeholder="agents/run-<auto>">
+            <div class="form-help">Leave empty for auto-generated branch name</div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h2 class="card-title">Cost Management</h2>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="daily-cost-limit">Daily Cost Limit (USD)</label>
+                <input type="number" id="daily-cost-limit" name="daily_cost_limit" step="0.01" min="0" placeholder="No limit">
+                <div class="form-help">Maximum daily spending in USD</div>
+            </div>
+
+            <div class="form-group">
+                <label for="cost-limit-action">Action on Limit</label>
+                <select id="cost-limit-action" name="cost_limit_action">
+                    <option value="warn">Warn</option>
+                    <option value="pause">Pause</option>
+                    <option value="fail">Fail</option>
+                </select>
+                <div class="form-help">Action when cost limit is reached</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h2 class="card-title">Resume Options</h2>
+
+        <div class="form-group">
+            <label for="start-at-step">Start at Step</label>
+            <select id="start-at-step" name="start_at_step" disabled>
+                <option value="">Start from beginning</option>
+            </select>
+            <div class="form-help">Resume a previous run from a specific step (requires existing run state)</div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h2 class="card-title">Environment Variables</h2>
+
+        <div id="env-vars-container">
+            <div class="env-var-row">
+                <input type="text" class="env-key" placeholder="KEY">
+                <input type="text" class="env-value" placeholder="VALUE">
+                <button type="button" class="btn-icon remove-env" title="Remove">&times;</button>
+            </div>
+        </div>
+        <button type="button" id="add-env-var" class="btn btn-secondary" style="margin-top: 8px;">+ Add Variable</button>
+    </div>
+
+    <div class="form-actions">
+        <a href="/runs" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary" id="submit-btn">
+            <span class="btn-text">Start Run</span>
+            <span class="btn-loading" style="display: none;">Starting...</span>
+        </button>
+    </div>
+</form>
+
+<div id="error-message" class="alert alert-error" style="display: none;"></div>
+
+<style>
+    .form-section {
+        margin-bottom: 32px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .form-section:last-of-type {
+        border-bottom: none;
+    }
+
+    .form-section .card-title {
+        margin-bottom: 16px;
+    }
+
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="number"],
+    .form-group select {
+        width: 100%;
+        padding: 10px 12px;
+        background-color: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-primary);
+        font-size: 14px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+    }
+
+    .form-help {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 4px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .checkbox-group label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent-blue);
+    }
+
+    .env-var-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .env-var-row input {
+        flex: 1;
+        padding: 8px 12px;
+        background-color: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-primary);
+        font-size: 14px;
+    }
+
+    .btn-icon {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 18px;
+    }
+
+    .btn-icon:hover {
+        background-color: rgba(248, 81, 73, 0.15);
+        color: var(--accent-red);
+        border-color: var(--accent-red);
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .alert {
+        padding: 16px;
+        border-radius: 8px;
+        margin-top: 16px;
+    }
+
+    .alert-error {
+        background-color: rgba(248, 81, 73, 0.15);
+        border: 1px solid var(--accent-red);
+        color: var(--accent-red);
+    }
+
+    @media (max-width: 768px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('new-run-form');
+    const workflowSelect = document.getElementById('workflow');
+    const workflowDesc = document.getElementById('workflow-description');
+    const worktreeCheckbox = document.getElementById('git-worktree');
+    const worktreeBranchGroup = document.getElementById('worktree-branch-group');
+    const startAtStepSelect = document.getElementById('start-at-step');
+    const addEnvBtn = document.getElementById('add-env-var');
+    const envContainer = document.getElementById('env-vars-container');
+    const submitBtn = document.getElementById('submit-btn');
+    const errorDiv = document.getElementById('error-message');
+
+    // Show workflow description
+    workflowSelect.addEventListener('change', async function() {
+        const selected = this.options[this.selectedIndex];
+        const description = selected.dataset.description;
+        workflowDesc.textContent = description || '';
+
+        // Load steps for resume selection
+        if (this.value) {
+            try {
+                const response = await fetch(`/api/workflow/${encodeURIComponent(this.value)}/steps`);
+                const data = await response.json();
+                if (data.steps) {
+                    startAtStepSelect.innerHTML = '<option value="">Start from beginning</option>';
+                    data.steps.forEach(step => {
+                        const option = document.createElement('option');
+                        option.value = step.id;
+                        option.textContent = `${step.id} (${step.agent})`;
+                        startAtStepSelect.appendChild(option);
+                    });
+                    startAtStepSelect.disabled = false;
+                }
+            } catch (e) {
+                console.error('Failed to load workflow steps:', e);
+            }
+        } else {
+            startAtStepSelect.innerHTML = '<option value="">Start from beginning</option>';
+            startAtStepSelect.disabled = true;
+        }
+    });
+
+    // Toggle worktree branch input
+    worktreeCheckbox.addEventListener('change', function() {
+        worktreeBranchGroup.style.display = this.checked ? 'block' : 'none';
+    });
+
+    // Add environment variable row
+    addEnvBtn.addEventListener('click', function() {
+        const row = document.createElement('div');
+        row.className = 'env-var-row';
+        row.innerHTML = `
+            <input type="text" class="env-key" placeholder="KEY">
+            <input type="text" class="env-value" placeholder="VALUE">
+            <button type="button" class="btn-icon remove-env" title="Remove">&times;</button>
+        `;
+        envContainer.appendChild(row);
+    });
+
+    // Remove environment variable row
+    envContainer.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-env')) {
+            const row = e.target.closest('.env-var-row');
+            if (envContainer.children.length > 1) {
+                row.remove();
+            } else {
+                // Clear the last row instead of removing
+                row.querySelectorAll('input').forEach(input => input.value = '');
+            }
+        }
+    });
+
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        errorDiv.style.display = 'none';
+        submitBtn.querySelector('.btn-text').style.display = 'none';
+        submitBtn.querySelector('.btn-loading').style.display = 'inline';
+        submitBtn.disabled = true;
+
+        // Collect environment variables
+        const envVars = {};
+        envContainer.querySelectorAll('.env-var-row').forEach(row => {
+            const key = row.querySelector('.env-key').value.trim();
+            const value = row.querySelector('.env-value').value;
+            if (key) {
+                envVars[key] = value;
+            }
+        });
+
+        const payload = {
+            workflow: document.getElementById('workflow').value,
+            wrapper: document.getElementById('wrapper').value,
+            repo: document.getElementById('repo').value || null,
+            issue_number: document.getElementById('issue-number').value || null,
+            git_worktree: document.getElementById('git-worktree').checked,
+            git_worktree_branch: document.getElementById('git-worktree-branch').value || null,
+            daily_cost_limit: parseFloat(document.getElementById('daily-cost-limit').value) || null,
+            cost_limit_action: document.getElementById('cost-limit-action').value,
+            max_attempts: parseInt(document.getElementById('max-attempts').value) || 2,
+            max_iterations: parseInt(document.getElementById('max-iterations').value) || 4,
+            start_at_step: document.getElementById('start-at-step').value || null,
+            env_vars: Object.keys(envVars).length > 0 ? envVars : null,
+        };
+
+        try {
+            const response = await fetch('/api/runs/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Redirect to live view
+                window.location.href = result.log_url;
+            } else {
+                errorDiv.textContent = result.error || 'Failed to start run';
+                errorDiv.style.display = 'block';
+            }
+        } catch (err) {
+            errorDiv.textContent = 'Network error: ' + err.message;
+            errorDiv.style.display = 'block';
+        } finally {
+            submitBtn.querySelector('.btn-text').style.display = 'inline';
+            submitBtn.querySelector('.btn-loading').style.display = 'none';
+            submitBtn.disabled = false;
+        }
+    });
+});
+</script>
+{% endblock %}
