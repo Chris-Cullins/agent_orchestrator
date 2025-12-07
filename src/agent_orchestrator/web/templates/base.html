@@ -516,6 +516,47 @@
             gap: 4px;
         }
 
+        /* Quick actions */
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Action buttons in tables */
+        .actions-cell {
+            display: flex;
+            gap: 4px;
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .btn-action:hover {
+            background-color: var(--accent-blue);
+            border-color: var(--accent-blue);
+            text-decoration: none;
+        }
+
+        .btn-action.btn-resume {
+            color: var(--accent-yellow);
+        }
+
+        .btn-action.btn-resume:hover {
+            background-color: var(--accent-yellow);
+            color: var(--bg-primary);
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .stats-grid {
@@ -550,6 +591,7 @@
                     <a href="/" class="{{ 'active' if page_title == 'Dashboard' else '' }}">Dashboard</a>
                     <a href="/analytics" class="{{ 'active' if page_title == 'Cost Analytics' else '' }}">Analytics</a>
                     <a href="/runs" class="{{ 'active' if page_title == 'Run Explorer' else '' }}">Runs</a>
+                    <a href="/runs/new" class="btn btn-primary {{ 'active' if page_title == 'New Run' else '' }}" style="margin-left: 8px;">+ New Run</a>
                 </nav>
             </div>
         </div>

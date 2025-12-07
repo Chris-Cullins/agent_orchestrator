@@ -1,0 +1,508 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h1 class="page-title">
+                <a href="/runs" style="color: var(--text-secondary);">Runs</a> /
+                <span class="run-id">{{ run_id[:8] }}</span>
+                <span id="actual-run-id-container">
+                {% if actual_run_id and actual_run_id != run_id %}
+                <span style="color: var(--text-muted);">&rarr;</span>
+                <a href="/runs/{{ actual_run_id }}" class="run-id" style="color: var(--accent-blue);" id="actual-run-link">{{ actual_run_id }}</a>
+                {% else %}
+                <span id="loading-run-id" style="color: var(--text-muted);"> (starting...)</span>
+                {% endif %}
+                </span>
+                <span id="status-badge" class="status status-running">
+                    <span id="status-emoji">&#x23F3;</span>
+                    <span id="status-text">{{ 'RUNNING' if is_active else (run_info.status if run_info else 'STARTING') }}</span>
+                </span>
+            </h1>
+            <p class="page-subtitle">
+                {% if run_info %}
+                {{ run_info.workflow_name }} - Started {{ run_info.started_at[:16] if run_info.started_at else 'N/A' }}
+                {% else %}
+                Live output stream
+                {% endif %}
+            </p>
+        </div>
+        <div class="header-actions">
+            <button id="stop-btn" class="btn btn-secondary" {% if not is_active %}disabled{% endif %}>
+                Stop Run
+            </button>
+            <a href="/runs/{{ actual_run_id or run_id }}" class="btn btn-secondary" id="view-details-btn">View Details</a>
+            <a href="/runs/new" class="btn btn-primary">New Run</a>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Row -->
+<div class="stats-grid" id="stats-row">
+    <div class="stat-card">
+        <div class="stat-value" id="elapsed-time">--</div>
+        <div class="stat-label">Elapsed Time</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="line-count">0</div>
+        <div class="stat-label">Output Lines</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value cost" id="run-cost">{{ run_info.total_cost_usd|format_cost if run_info else '--' }}</div>
+        <div class="stat-label">Cost</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="steps-status" style="font-size: 16px;">
+            {% if run_info %}
+            {{ run_info.steps_completed }}/{{ run_info.steps_completed + run_info.steps_failed }}
+            {% else %}
+            --/--
+            {% endif %}
+        </div>
+        <div class="stat-label">Steps Completed</div>
+    </div>
+</div>
+
+<!-- Live Output Terminal -->
+<div class="card terminal-card">
+    <div class="card-header">
+        <h2 class="card-title">Live Output</h2>
+        <div class="terminal-controls">
+            <label class="checkbox-inline">
+                <input type="checkbox" id="auto-scroll" checked> Auto-scroll
+            </label>
+            <button id="clear-btn" class="btn btn-secondary btn-sm">Clear</button>
+            <button id="copy-btn" class="btn btn-secondary btn-sm">Copy</button>
+        </div>
+    </div>
+    <div id="terminal" class="terminal">
+        <div id="terminal-content"></div>
+        <div id="terminal-cursor" class="cursor"></div>
+    </div>
+</div>
+
+<!-- Step Timeline (if available) -->
+{% if steps %}
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2 class="card-title">Step Timeline</h2>
+    </div>
+    <div class="step-timeline">
+        {% for step in steps %}
+        <div class="step-item">
+            <div class="step-marker {% if step.status == 'COMPLETED' %}success{% elif step.status == 'FAILED' %}error{% elif step.status == 'RUNNING' %}running{% endif %}">
+                {{ step.status|status_emoji }}
+            </div>
+            <div class="step-header">
+                <span class="step-name">{{ step.step_id }}</span>
+                <span class="status {{ step.status|status_class }}" style="font-size: 11px;">
+                    {{ step.status }}
+                </span>
+                <span class="model-badge model-{{ step.model|lower }}">{{ step.model }}</span>
+            </div>
+            <div class="step-meta">
+                <span>&#x1F4B0; {{ step.cost_usd|format_cost }}</span>
+                <span>&#x1F4DD; {{ (step.input_tokens + step.output_tokens)|format_tokens }} tokens</span>
+                <span>&#x23F1; {{ step.duration_ms|format_duration }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Resume Section (for failed runs) -->
+{% if run_info and run_info.status == 'FAILED' %}
+<div class="card resume-card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2 class="card-title">Resume Run</h2>
+    </div>
+    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+        This run failed. You can resume from a specific step to retry.
+    </p>
+    <div style="display: flex; gap: 12px; align-items: center;">
+        <select id="resume-step" class="form-select">
+            {% for step in steps %}
+            <option value="{{ step.step_id }}" {% if step.status == 'FAILED' %}selected{% endif %}>
+                {{ step.step_id }} ({{ step.status }})
+            </option>
+            {% endfor %}
+        </select>
+        <button id="resume-btn" class="btn btn-primary">Resume from Step</button>
+    </div>
+</div>
+{% endif %}
+
+<style>
+    .header-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .terminal-card {
+        height: calc(100vh - 400px);
+        min-height: 400px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .terminal-controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .checkbox-inline {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        cursor: pointer;
+    }
+
+    .checkbox-inline input {
+        accent-color: var(--accent-blue);
+    }
+
+    .btn-sm {
+        padding: 4px 12px;
+        font-size: 12px;
+    }
+
+    .terminal {
+        flex: 1;
+        background-color: #0d1117;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 16px;
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        overflow-y: auto;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+
+    .terminal-line {
+        margin: 0;
+        padding: 0;
+    }
+
+    .terminal-line.error {
+        color: var(--accent-red);
+    }
+
+    .terminal-line.warning {
+        color: var(--accent-yellow);
+    }
+
+    .terminal-line.success {
+        color: var(--accent-green);
+    }
+
+    .terminal-line.info {
+        color: var(--accent-blue);
+    }
+
+    .cursor {
+        display: inline-block;
+        width: 8px;
+        height: 14px;
+        background-color: var(--text-primary);
+        animation: blink 1s step-end infinite;
+    }
+
+    .cursor.hidden {
+        display: none;
+    }
+
+    @keyframes blink {
+        50% { opacity: 0; }
+    }
+
+    .form-select {
+        padding: 8px 12px;
+        background-color: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-primary);
+        font-size: 14px;
+        min-width: 200px;
+    }
+
+    .resume-card {
+        border-color: var(--accent-yellow);
+    }
+
+    /* Connection status indicator */
+    .connection-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .connection-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: var(--accent-green);
+    }
+
+    .connection-dot.disconnected {
+        background-color: var(--accent-red);
+    }
+
+    .connection-dot.connecting {
+        background-color: var(--accent-yellow);
+        animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const runId = '{{ run_id }}';
+    const terminalContent = document.getElementById('terminal-content');
+    const cursor = document.getElementById('terminal-cursor');
+    const autoScrollCheckbox = document.getElementById('auto-scroll');
+    const clearBtn = document.getElementById('clear-btn');
+    const copyBtn = document.getElementById('copy-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const statusBadge = document.getElementById('status-badge');
+    const statusEmoji = document.getElementById('status-emoji');
+    const statusText = document.getElementById('status-text');
+    const elapsedTimeEl = document.getElementById('elapsed-time');
+    const lineCountEl = document.getElementById('line-count');
+
+    let lineCount = 0;
+    let startTime = new Date();
+    let eventSource = null;
+    let isComplete = false;
+    let actualRunId = '{{ actual_run_id or "" }}';
+    let runIdPollingInterval = null;
+
+    // Poll for actual run ID (orchestrator generates different ID than web tracking ID)
+    function pollForActualRunId() {
+        if (actualRunId && actualRunId !== runId) {
+            // Already have actual run ID
+            return;
+        }
+
+        runIdPollingInterval = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/runs/${runId}/status`);
+                const data = await response.json();
+
+                if (data.actual_run_id && data.actual_run_id !== runId) {
+                    actualRunId = data.actual_run_id;
+
+                    // Update the run ID display
+                    const container = document.getElementById('actual-run-id-container');
+                    container.innerHTML = `
+                        <span style="color: var(--text-muted);">&rarr;</span>
+                        <a href="/runs/${actualRunId}" class="run-id" style="color: var(--accent-blue);" id="actual-run-link">${actualRunId}</a>
+                    `;
+
+                    // Update View Details button
+                    const viewDetailsBtn = document.getElementById('view-details-btn');
+                    if (viewDetailsBtn) {
+                        viewDetailsBtn.href = `/runs/${actualRunId}`;
+                    }
+
+                    // Stop polling
+                    clearInterval(runIdPollingInterval);
+                    runIdPollingInterval = null;
+                }
+            } catch (e) {
+                console.error('Failed to poll for run ID:', e);
+            }
+        }, 1000); // Poll every second
+    }
+
+    // Update elapsed time
+    function updateElapsedTime() {
+        if (isComplete) return;
+        const elapsed = Math.floor((new Date() - startTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        elapsedTimeEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+    setInterval(updateElapsedTime, 1000);
+
+    // Add line to terminal
+    function addLine(text) {
+        const line = document.createElement('div');
+        line.className = 'terminal-line';
+
+        // Color-code based on content
+        const lowerText = text.toLowerCase();
+        if (lowerText.includes('error') || lowerText.includes('failed') || lowerText.includes('exception')) {
+            line.classList.add('error');
+        } else if (lowerText.includes('warning') || lowerText.includes('warn')) {
+            line.classList.add('warning');
+        } else if (lowerText.includes('success') || lowerText.includes('completed') || lowerText.includes('passed')) {
+            line.classList.add('success');
+        } else if (lowerText.includes('info') || lowerText.includes('starting') || lowerText.includes('running')) {
+            line.classList.add('info');
+        }
+
+        line.textContent = text;
+        terminalContent.appendChild(line);
+        lineCount++;
+        lineCountEl.textContent = lineCount;
+
+        if (autoScrollCheckbox.checked) {
+            line.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+    }
+
+    // Update status
+    function updateStatus(status, emoji = null) {
+        statusText.textContent = status;
+        if (emoji) statusEmoji.textContent = emoji;
+
+        statusBadge.className = 'status';
+        switch (status.toUpperCase()) {
+            case 'COMPLETED':
+                statusBadge.classList.add('status-success');
+                break;
+            case 'FAILED':
+                statusBadge.classList.add('status-error');
+                break;
+            case 'RUNNING':
+                statusBadge.classList.add('status-running');
+                break;
+            default:
+                statusBadge.classList.add('status-pending');
+        }
+    }
+
+    // Connect to SSE stream
+    function connect() {
+        addLine('Connecting to run output stream...');
+
+        eventSource = new EventSource(`/api/runs/${runId}/stream`);
+
+        eventSource.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'output') {
+                    addLine(data.line);
+                } else if (data.type === 'complete') {
+                    isComplete = true;
+                    cursor.classList.add('hidden');
+                    stopBtn.disabled = true;
+
+                    if (data.exit_code === 0) {
+                        updateStatus('COMPLETED', '&#x2705;');
+                        addLine('\n--- Run completed successfully ---');
+                    } else {
+                        updateStatus('FAILED', '&#x274C;');
+                        addLine(`\n--- Run failed with exit code ${data.exit_code} ---`);
+                    }
+
+                    eventSource.close();
+                } else if (data.type === 'error') {
+                    addLine(`ERROR: ${data.message}`);
+                    updateStatus('ERROR', '&#x26A0;');
+                    eventSource.close();
+                }
+            } catch (e) {
+                console.error('Failed to parse SSE data:', e);
+            }
+        };
+
+        eventSource.onerror = function(event) {
+            if (!isComplete) {
+                addLine('Connection lost. Reconnecting in 3 seconds...');
+                eventSource.close();
+                setTimeout(connect, 3000);
+            }
+        };
+    }
+
+    // Start connection
+    {% if is_active %}
+    connect();
+    pollForActualRunId();  // Start polling for actual run ID
+    {% else %}
+    isComplete = true;
+    cursor.classList.add('hidden');
+    stopBtn.disabled = true;
+    addLine('Run is not active. Showing historical data.');
+    {% endif %}
+
+    // Clear terminal
+    clearBtn.addEventListener('click', function() {
+        terminalContent.innerHTML = '';
+        lineCount = 0;
+        lineCountEl.textContent = '0';
+    });
+
+    // Copy output
+    copyBtn.addEventListener('click', function() {
+        const text = terminalContent.innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            const original = copyBtn.textContent;
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => copyBtn.textContent = original, 2000);
+        });
+    });
+
+    // Stop run
+    stopBtn.addEventListener('click', async function() {
+        if (confirm('Are you sure you want to stop this run?')) {
+            stopBtn.disabled = true;
+            stopBtn.textContent = 'Stopping...';
+
+            try {
+                const response = await fetch(`/api/runs/${runId}/stop`, { method: 'POST' });
+                const result = await response.json();
+
+                if (result.success) {
+                    addLine('\n--- Run stopped by user ---');
+                    updateStatus('STOPPED', '&#x1F6D1;');
+                } else {
+                    addLine(`Failed to stop run: ${result.error}`);
+                    stopBtn.disabled = false;
+                    stopBtn.textContent = 'Stop Run';
+                }
+            } catch (e) {
+                addLine(`Error stopping run: ${e.message}`);
+                stopBtn.disabled = false;
+                stopBtn.textContent = 'Stop Run';
+            }
+        }
+    });
+
+    // Resume button (if present)
+    const resumeBtn = document.getElementById('resume-btn');
+    if (resumeBtn) {
+        resumeBtn.addEventListener('click', function() {
+            const stepId = document.getElementById('resume-step').value;
+            window.location.href = `/runs/new?resume_from=${runId}&start_at_step=${stepId}`;
+        });
+    }
+
+    // Cleanup on page leave
+    window.addEventListener('beforeunload', function() {
+        if (eventSource) {
+            eventSource.close();
+        }
+        if (runIdPollingInterval) {
+            clearInterval(runIdPollingInterval);
+        }
+    });
+});
+</script>
+{% endblock %}
