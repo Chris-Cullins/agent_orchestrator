@@ -526,6 +526,38 @@ Key takeaways:
 - Use `run_state.json` together with `--start-at-step` to resume a workflow without re-running completed steps.
 - Prefer deleting the entire `.agents/runs/<run_id>/` folder (or starting a new `--run-id`) to reset state instead of editing `run_state.json` in place.
 
+#### Automatic Run Directory Cleanup
+
+The orchestrator automatically cleans up old run directories at startup to prevent unbounded disk usage. This cleanup runs before each workflow execution and uses a two-phase retention policy:
+
+**Phase 1 - Time-based cleanup:**
+- Removes run directories older than **48 hours**
+- **Failed runs are preserved** for debugging (runs with any step in `FAILED` status)
+- Active runs (`RUNNING` or `WAITING_ON_HUMAN` status) are never deleted
+
+**Phase 2 - Count-based cleanup:**
+- Enforces a maximum of **10 run directories**
+- If the count exceeds the limit after time-based cleanup, the oldest runs are deleted
+- Unlike time-based cleanup, this phase **will delete failed runs** when necessary to stay under the limit
+- Active runs are still protected
+
+**Skipping cleanup:**
+
+If you need to preserve all run directories (e.g., for forensic analysis or during debugging), use the `--skip-cleanup` flag:
+
+```bash
+python -m agent_orchestrator.cli run \
+  --repo /path/to/your/project \
+  --workflow src/agent_orchestrator/workflows/workflow.yaml \
+  --wrapper src/agent_orchestrator/wrappers/claude_wrapper.py \
+  --skip-cleanup
+```
+
+**Best practices:**
+- Failed runs are preserved by default for post-mortem analysis - review them promptly before count-based cleanup removes them
+- Use `--skip-cleanup` when investigating issues across multiple runs
+- The cleanup settings (48 hours, 10 runs) are currently hardcoded; adjust the source if your workflow needs different retention
+
 ### Step 6: Customizing Agent Behavior with Prompt Overrides
 
 The orchestrator supports repository-level prompt customization, allowing you to tailor agent behavior without modifying the orchestrator codebase or workflow definitions.
@@ -1105,6 +1137,7 @@ Use `iteration_count` together with the per-run reports to understand how many t
 - `--max-attempts 3` - Retry failed steps up to 3 times
 - `--poll-interval 0.5` - Check for completion every 0.5 seconds
 - `--max-iterations 4` - Cap loop-back iterations before marking a step failed
+- `--skip-cleanup` - Skip automatic cleanup of old run directories at startup
 - `--schema path/to/schema.json` - Validate run reports against JSON schema
 
 ### Troubleshooting
@@ -1177,6 +1210,7 @@ steps:
   - `workflow.py` — Workflow loading and validation
   - `state.py` — Execution state persistence
   - `reporting.py` — Run report validation and parsing
+  - `run_cleanup.py` — Automatic run directory cleanup with time and count-based retention
   - `time_utils.py` — Timezone-aware timestamp helpers shared across the orchestrator
   - `gating.py` — Conditional workflow progression
   - `memory.py` — Persistent agent memory via AGENTS.md files

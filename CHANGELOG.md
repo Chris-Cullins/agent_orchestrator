@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Automatic run directory cleanup at orchestrator startup** (Issue #70)
+  - Added `src/agent_orchestrator/run_cleanup.py` module with cleanup utilities
+  - Time-based retention: Deletes runs older than 48 hours (excludes failed runs)
+  - Count-based retention: Enforces maximum of 10 run directories
+  - Cleanup runs automatically before workflow execution begins
+  - Active runs (status RUNNING or WAITING_ON_HUMAN) are never deleted
+  - Failed runs are preserved by time-based cleanup for debugging
+  - Added `--skip-cleanup` CLI flag to bypass automatic cleanup
+  - Comprehensive unit tests in `tests/test_run_cleanup.py`
+
 - **Loop control structure for iterating over collections in workflows** (Issue #63)
   - Added `LoopConfig` model to define loop behavior with multiple item sources
   - Added `loop` field to Step model for configuring iteration over collections

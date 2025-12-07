@@ -28,6 +28,7 @@ from .polling import (
     get_poll_source,
     load_poll_config,
 )
+from .run_cleanup import cleanup_runs
 
 
 _LOG = logging.getLogger(__name__)
@@ -107,6 +108,13 @@ def run_from_args(args: argparse.Namespace) -> None:
         workflow = load_workflow(workflow_path)
     except WorkflowLoadError as exc:
         raise SystemExit(f"Workflow error: {exc}") from exc
+
+    # Run cleanup on target repo's runs directory before starting
+    if not args.skip_cleanup:
+        try:
+            cleanup_runs(repo_dir)
+        except Exception as exc:
+            _LOG.warning("Run cleanup failed (continuing): %s", exc)
 
     if args.git_worktree:
         if args.workdir:
@@ -305,6 +313,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--start-at-step",
         help="Resume a previous run starting at the specified step (resets that step and all downstream steps)",
+    )
+    run_parser.add_argument(
+        "--skip-cleanup",
+        action="store_true",
+        help="Skip automatic cleanup of old run directories at startup",
     )
 
     worktree_group = run_parser.add_argument_group("git worktree automation")
