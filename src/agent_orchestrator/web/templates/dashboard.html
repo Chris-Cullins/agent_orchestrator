@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-subtitle">Today's overview - {{ stats.date }}</p>
+</div>
+
+<!-- Stats cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value runs">{{ stats.total_runs }}</div>
+        <div class="stat-label">Total Runs</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value steps">{{ stats.total_steps }}</div>
+        <div class="stat-label">Total Steps</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value cost">{{ stats.total_cost_usd|format_cost }}</div>
+        <div class="stat-label">Total Cost</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value tokens">{{ (stats.total_input_tokens + stats.total_output_tokens)|format_tokens }}</div>
+        <div class="stat-label">Total Tokens</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Recent runs -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Recent Runs</h2>
+            <a href="/runs" class="btn btn-secondary">View All</a>
+        </div>
+        {% if recent_runs %}
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Run ID</th>
+                        <th>Workflow</th>
+                        <th>Status</th>
+                        <th>Cost</th>
+                        <th>Steps</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in recent_runs %}
+                    <tr>
+                        <td>
+                            <a href="/runs/{{ run.run_id }}" class="run-id">{{ run.run_id[:8] }}</a>
+                        </td>
+                        <td>{{ run.workflow_name }}</td>
+                        <td>
+                            <span class="status {{ run.status|status_class }}">
+                                {{ run.status|status_emoji }} {{ run.status }}
+                            </span>
+                        </td>
+                        <td>{{ run.total_cost_usd|format_cost }}</td>
+                        <td>
+                            {% if run.steps_failed > 0 %}
+                            <span style="color: var(--accent-green);">{{ run.steps_completed }}</span> /
+                            <span style="color: var(--accent-red);">{{ run.steps_failed }}</span>
+                            {% else %}
+                            {{ run.steps_completed }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">&#x1F4AD;</div>
+            <p>No runs today</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Cost by model -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Cost by Model</h2>
+        </div>
+        {% if stats.cost_by_model %}
+        <div class="cost-breakdown">
+            {% set total_cost = stats.total_cost_usd or 0.0001 %}
+            {% for model, cost in stats.cost_by_model.items() %}
+            <div class="cost-item">
+                <span class="cost-label">
+                    <span class="model-badge model-{{ model }}">{{ model }}</span>
+                </span>
+                <div class="cost-bar">
+                    <div class="cost-bar-fill {{ model }}" style="width: {{ (cost / total_cost * 100)|round(1) }}%;"></div>
+                </div>
+                <span class="cost-amount">{{ cost|format_cost }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">&#x1F4CA;</div>
+            <p>No cost data yet</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Token usage -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2 class="card-title">Token Usage</h2>
+    </div>
+    <div class="stats-grid" style="margin-bottom: 0;">
+        <div class="stat-card" style="background: transparent; border: none; padding: 0;">
+            <div class="stat-value" style="font-size: 24px; color: var(--accent-blue);">{{ stats.total_input_tokens|format_tokens }}</div>
+            <div class="stat-label">Input Tokens</div>
+        </div>
+        <div class="stat-card" style="background: transparent; border: none; padding: 0;">
+            <div class="stat-value" style="font-size: 24px; color: var(--accent-purple);">{{ stats.total_output_tokens|format_tokens }}</div>
+            <div class="stat-label">Output Tokens</div>
+        </div>
+        <div class="stat-card" style="background: transparent; border: none; padding: 0;">
+            <div class="stat-value" style="font-size: 24px; color: var(--accent-green);">{{ stats.completed_steps }}</div>
+            <div class="stat-label">Completed Steps</div>
+        </div>
+        <div class="stat-card" style="background: transparent; border: none; padding: 0;">
+            <div class="stat-value" style="font-size: 24px; color: var(--accent-red);">{{ stats.failed_steps }}</div>
+            <div class="stat-label">Failed Steps</div>
+        </div>
+    </div>
+</div>
+{% endblock %}

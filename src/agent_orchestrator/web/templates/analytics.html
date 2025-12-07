@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h1 class="page-title">Cost Analytics</h1>
+            <p class="page-subtitle">Track spending and token usage over time</p>
+        </div>
+        <div class="time-range">
+            <a href="/analytics?days=7" class="{{ 'active' if selected_days == 7 else '' }}">7 days</a>
+            <a href="/analytics?days=14" class="{{ 'active' if selected_days == 14 else '' }}">14 days</a>
+            <a href="/analytics?days=30" class="{{ 'active' if selected_days == 30 else '' }}">30 days</a>
+        </div>
+    </div>
+</div>
+
+<!-- Summary stats -->
+{% set total_cost = stats_list|sum(attribute='total_cost_usd') %}
+{% set total_runs = stats_list|sum(attribute='total_runs') %}
+{% set total_tokens = stats_list|sum(attribute='total_input_tokens') + stats_list|sum(attribute='total_output_tokens') %}
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value cost">{{ total_cost|format_cost }}</div>
+        <div class="stat-label">Total Cost ({{ selected_days }} days)</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value runs">{{ total_runs }}</div>
+        <div class="stat-label">Total Runs</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value tokens">{{ total_tokens|format_tokens }}</div>
+        <div class="stat-label">Total Tokens</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--accent-yellow);">{{ (total_cost / selected_days)|format_cost }}</div>
+        <div class="stat-label">Avg Daily Cost</div>
+    </div>
+</div>
+
+<!-- Cost over time chart -->
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-header">
+        <h2 class="card-title">Daily Cost</h2>
+    </div>
+    <div class="chart-container">
+        <canvas id="costChart"></canvas>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Token usage chart -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Token Usage Over Time</h2>
+        </div>
+        <div class="chart-container">
+            <canvas id="tokenChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Cost by model pie chart -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Cost by Model</h2>
+        </div>
+        {% if today_stats.cost_by_model %}
+        <div class="cost-breakdown" style="margin-top: 16px;">
+            {% set total = today_stats.total_cost_usd or 0.0001 %}
+            {% for model, cost in today_stats.cost_by_model.items() %}
+            <div class="cost-item">
+                <span class="cost-label">
+                    <span class="model-badge model-{{ model }}">{{ model }}</span>
+                </span>
+                <div class="cost-bar">
+                    <div class="cost-bar-fill {{ model }}" style="width: {{ (cost / total * 100)|round(1) }}%;"></div>
+                </div>
+                <span class="cost-amount">{{ cost|format_cost }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div style="margin-top: 24px;">
+            <div class="chart-container" style="height: 200px;">
+                <canvas id="modelChart"></canvas>
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">&#x1F4CA;</div>
+            <p>No cost data for today</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Runs over time -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2 class="card-title">Runs Per Day</h2>
+    </div>
+    <div class="chart-container">
+        <canvas id="runsChart"></canvas>
+    </div>
+</div>
+
+<!-- Cost by Step -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2 class="card-title">Cost by Step ({{ selected_days }} days)</h2>
+    </div>
+    {% if cost_by_step %}
+    <div class="grid-2" style="gap: 24px;">
+        <div>
+            <div class="cost-breakdown" style="margin-top: 16px;">
+                {% set step_total = cost_by_step.values()|sum or 0.0001 %}
+                {% for step_id, cost in cost_by_step.items() %}
+                <div class="cost-item">
+                    <span class="cost-label" style="width: 140px; font-size: 13px;">{{ step_id }}</span>
+                    <div class="cost-bar">
+                        <div class="cost-bar-fill" style="width: {{ (cost / step_total * 100)|round(1) }}%; background: linear-gradient(90deg, #58a6ff, #a371f7);"></div>
+                    </div>
+                    <span class="cost-amount">{{ cost|format_cost }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div>
+            <div class="chart-container" style="height: 280px;">
+                <canvas id="stepCostChart"></canvas>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">&#x1F4CA;</div>
+        <p>No step cost data available</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    const chartData = {{ chart_data|safe }};
+
+    // Chart.js global config for dark mode
+    Chart.defaults.color = '#8b949e';
+    Chart.defaults.borderColor = '#30363d';
+
+    // Cost chart
+    new Chart(document.getElementById('costChart'), {
+        type: 'line',
+        data: {
+            labels: chartData.dates,
+            datasets: [{
+                label: 'Daily Cost ($)',
+                data: chartData.costs,
+                borderColor: '#3fb950',
+                backgroundColor: 'rgba(63, 185, 80, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Token chart
+    new Chart(document.getElementById('tokenChart'), {
+        type: 'bar',
+        data: {
+            labels: chartData.dates,
+            datasets: [
+                {
+                    label: 'Input Tokens',
+                    data: chartData.tokens_input,
+                    backgroundColor: 'rgba(88, 166, 255, 0.7)',
+                    borderColor: '#58a6ff',
+                    borderWidth: 1,
+                },
+                {
+                    label: 'Output Tokens',
+                    data: chartData.tokens_output,
+                    backgroundColor: 'rgba(163, 113, 247, 0.7)',
+                    borderColor: '#a371f7',
+                    borderWidth: 1,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' }
+            },
+            scales: {
+                x: { stacked: true },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+                            if (value >= 1000) return (value / 1000).toFixed(0) + 'K';
+                            return value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Runs chart
+    new Chart(document.getElementById('runsChart'), {
+        type: 'bar',
+        data: {
+            labels: chartData.dates,
+            datasets: [{
+                label: 'Runs',
+                data: chartData.runs,
+                backgroundColor: 'rgba(88, 166, 255, 0.7)',
+                borderColor: '#58a6ff',
+                borderWidth: 1,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+
+    // Model breakdown pie chart (if data exists)
+    const modelChartEl = document.getElementById('modelChart');
+    if (modelChartEl) {
+        const modelData = {{ today_stats.cost_by_model|tojson|safe if today_stats.cost_by_model else '{}' }};
+        const modelLabels = Object.keys(modelData);
+        const modelValues = Object.values(modelData);
+        const modelColors = {
+            'opus': '#a371f7',
+            'sonnet': '#58a6ff',
+            'haiku': '#3fb950',
+        };
+
+        if (modelLabels.length > 0) {
+            new Chart(modelChartEl, {
+                type: 'doughnut',
+                data: {
+                    labels: modelLabels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
+                    datasets: [{
+                        data: modelValues,
+                        backgroundColor: modelLabels.map(l => modelColors[l] || '#8b949e'),
+                        borderWidth: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // Step cost pie chart
+    const stepCostChartEl = document.getElementById('stepCostChart');
+    if (stepCostChartEl) {
+        const stepData = {{ cost_by_step|tojson|safe if cost_by_step else '{}' }};
+        const stepLabels = Object.keys(stepData);
+        const stepValues = Object.values(stepData);
+
+        // Generate colors for each step
+        const stepColors = [
+            '#58a6ff', '#a371f7', '#3fb950', '#d29922', '#f85149',
+            '#8b949e', '#79c0ff', '#d2a8ff', '#7ee787', '#e3b341',
+        ];
+
+        if (stepLabels.length > 0) {
+            new Chart(stepCostChartEl, {
+                type: 'pie',
+                data: {
+                    labels: stepLabels,
+                    datasets: [{
+                        data: stepValues,
+                        backgroundColor: stepLabels.map((_, i) => stepColors[i % stepColors.length]),
+                        borderWidth: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 8,
+                                font: { size: 11 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `$${value.toFixed(2)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+</script>
+{% endblock %}

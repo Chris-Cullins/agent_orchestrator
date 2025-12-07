@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h1 class="page-title">
+                <a href="/runs" style="color: var(--text-secondary);">Runs</a> /
+                <span class="run-id">{{ run_id[:8] }}</span>
+            </h1>
+            <p class="page-subtitle">
+                {{ run_info.workflow_name }} -
+                <span class="status {{ run_info.status|status_class }}">
+                    {{ run_info.status|status_emoji }} {{ run_info.status }}
+                </span>
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Run summary -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value cost">{{ run_info.total_cost_usd|format_cost }}</div>
+        <div class="stat-label">Total Cost</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--accent-green);">{{ run_info.steps_completed }}</div>
+        <div class="stat-label">Completed Steps</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--accent-red);">{{ run_info.steps_failed }}</div>
+        <div class="stat-label">Failed Steps</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--text-secondary); font-size: 16px;">
+            {{ run_info.started_at[:16] if run_info.started_at else '-' }}
+        </div>
+        <div class="stat-label">Started At</div>
+    </div>
+</div>
+
+<!-- Run details -->
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Run Information</h2>
+        </div>
+        <table style="border: none;">
+            <tr>
+                <td style="color: var(--text-secondary); width: 120px; border: none;">Run ID</td>
+                <td class="run-id" style="border: none;">{{ run_id }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-secondary); border: none;">Workflow</td>
+                <td style="border: none;">{{ run_info.workflow_name }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-secondary); border: none;">Date</td>
+                <td style="border: none;">{{ run_info.date }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-secondary); border: none;">Started</td>
+                <td style="border: none;">{{ run_info.started_at if run_info.started_at else '-' }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-secondary); border: none;">Ended</td>
+                <td style="border: none;">{{ run_info.ended_at if run_info.ended_at else '-' }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Step Summary</h2>
+        </div>
+        {% if steps %}
+        {% set total_tokens = steps|sum(attribute='input_tokens') + steps|sum(attribute='output_tokens') %}
+        {% set total_duration = steps|sum(attribute='duration_ms') %}
+        <table style="border: none;">
+            <tr>
+                <td style="color: var(--text-secondary); width: 120px; border: none;">Total Steps</td>
+                <td style="border: none;">{{ steps|length }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-secondary); border: none;">Total Tokens</td>
+                <td style="border: none;">{{ total_tokens|format_tokens }}</td>
+            </tr>
+            <tr>
+                <td style="color: var(--text-secondary); border: none;">Total Duration</td>
+                <td style="border: none;">{{ total_duration|format_duration }}</td>
+            </tr>
+        </table>
+        {% else %}
+        <p style="color: var(--text-secondary);">No step details available</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Step timeline -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2 class="card-title">Step Timeline</h2>
+    </div>
+    {% if steps %}
+    <div class="step-timeline">
+        {% for step in steps %}
+        <div class="step-item">
+            <div class="step-marker {% if step.status == 'COMPLETED' %}success{% elif step.status == 'FAILED' %}error{% elif step.status == 'RUNNING' %}running{% endif %}">
+                {{ step.status|status_emoji }}
+            </div>
+            <div class="step-header">
+                <span class="step-name">{{ step.step_id }}</span>
+                <span class="status {{ step.status|status_class }}" style="font-size: 11px;">
+                    {{ step.status }}
+                </span>
+                <span class="model-badge model-{{ step.model|lower }}">{{ step.model }}</span>
+            </div>
+            <div class="step-meta">
+                <span>&#x1F4B0; {{ step.cost_usd|format_cost }}</span>
+                <span>&#x1F4DD; {{ (step.input_tokens + step.output_tokens)|format_tokens }} tokens</span>
+                <span>&#x23F1; {{ step.duration_ms|format_duration }}</span>
+                <span style="color: var(--text-muted);">{{ step.timestamp[:19] if step.timestamp else '-' }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">&#x1F4CB;</div>
+        <p>No step details available for this run</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
