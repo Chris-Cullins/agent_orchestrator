@@ -22,6 +22,12 @@ from .git_worktree import (
     GitWorktreeManager,
     persist_worktree_outputs,
 )
+from .polling import (
+    PollConfigError,
+    TriggerExecutor,
+    get_poll_source,
+    load_poll_config,
+)
 
 
 _LOG = logging.getLogger(__name__)
@@ -343,6 +349,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Send daily summary via email",
     )
 
+    # Poll subcommand
+    poll_parser = subparsers.add_parser("poll", help="Poll external sources and trigger workflows")
+    poll_parser.add_argument(
+        "--config",
+        required=True,
+        help="Path to poll configuration YAML file",
+    )
+    poll_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be triggered without executing",
+    )
+    poll_parser.add_argument(
+        "--workdir",
+        help="Working directory for trigger scripts (default: current directory)",
+    )
+
     return parser
 
 
@@ -379,6 +402,62 @@ def stats_from_args(args: argparse.Namespace) -> None:
             _LOG.error("Failed to send email: %s", e)
 
 
+def poll_from_args(args: argparse.Namespace) -> None:
+    """Handle the poll subcommand."""
+    config_path = Path(args.config).expanduser().resolve()
+    workdir = Path(args.workdir).expanduser().resolve() if args.workdir else Path.cwd()
+
+    try:
+        config = load_poll_config(config_path)
+    except PollConfigError as exc:
+        raise SystemExit(f"Poll config error: {exc}") from exc
+
+    triggered_count = 0
+    failed_count = 0
+
+    for source_config in config.sources:
+        try:
+            source = get_poll_source(source_config.type)
+        except ValueError as exc:
+            _LOG.error("Failed to get poll source: %s", exc)
+            continue
+
+        _LOG.info("Polling %s source...", source_config.type)
+        events = source.poll(source_config)
+
+        if not events:
+            _LOG.info("No matching items found for %s", source_config.type)
+            continue
+
+        _LOG.info("Found %d matching items", len(events))
+
+        for event in events:
+            if args.dry_run:
+                _LOG.info("[DRY RUN] Would trigger for %s #%s: %s",
+                         event.source_type, event.item_id, event.item_url)
+                continue
+
+            # Mark as processing BEFORE executing (prevents re-trigger on next poll)
+            source.mark_processed(event, source_config)
+
+            # Execute the trigger script
+            executor = TriggerExecutor(workdir=workdir)
+            exit_code = executor.execute(event, source_config.on_match)
+
+            if exit_code == 0:
+                triggered_count += 1
+                _LOG.info("Successfully triggered for %s #%s", event.source_type, event.item_id)
+            else:
+                failed_count += 1
+                _LOG.warning("Trigger script failed with exit code %d for %s #%s",
+                           exit_code, event.source_type, event.item_id)
+
+    if args.dry_run:
+        _LOG.info("Dry run complete. No actions taken.")
+    else:
+        _LOG.info("Poll complete. Triggered: %d, Failed: %d", triggered_count, failed_count)
+
+
 def main(argv: Optional[list[str]] = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -392,6 +471,8 @@ def main(argv: Optional[list[str]] = None) -> None:
         run_from_args(args)
     elif args.command == "stats":
         stats_from_args(args)
+    elif args.command == "poll":
+        poll_from_args(args)
     else:  # pragma: no cover - defensive
         parser.error(f"Unknown command {args.command}")
 

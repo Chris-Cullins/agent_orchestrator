@@ -1,0 +1,44 @@
+# Example poll configuration for GitHub issues
+#
+# Usage:
+#   python -m agent_orchestrator.cli poll --config config/poll_config_example.yaml
+#
+# With systemd timer, this runs periodically to watch for issues with
+# specific labels and trigger workflows when found.
+
+sources:
+  # Watch for issues labeled "ready-for-agent"
+  - type: github_issues
+    repo: owner/repo  # Replace with your repo, or set GITHUB_REPOSITORY env var
+    filter:
+      # Issues must have ALL of these labels
+      labels:
+        - "ready-for-agent"
+      # Issues must NOT have any of these labels
+      exclude_labels:
+        - "wip"
+        - "blocked"
+      # Only open issues (default)
+      state: open
+    # Label added after triggering to prevent re-processing
+    processed_label: "agent-processing"
+    # What to run when a matching issue is found
+    on_match:
+      script: ./scripts/trigger_issue_workflow.sh
+      # Additional environment variables passed to the script
+      env:
+        WORKFLOW: src/agent_orchestrator/workflows/workflow_github_issue.yaml
+        WRAPPER: src/agent_orchestrator/wrappers/claude_wrapper.py
+        DAILY_COST_LIMIT: "50.00"
+
+  # Example: Another source watching for different labels
+  # - type: github_issues
+  #   repo: owner/repo
+  #   filter:
+  #     labels:
+  #       - "needs-tests"
+  #   processed_label: "tests-in-progress"
+  #   on_match:
+  #     script: ./scripts/trigger_test_workflow.sh
+  #     env:
+  #       WORKFLOW: src/agent_orchestrator/workflows/workflow_tests.yaml
