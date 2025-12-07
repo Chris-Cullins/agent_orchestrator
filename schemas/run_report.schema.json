@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/anthropics/agent-orchestrator/schemas/run_report.schema.json",
+  "title": "Run Report",
+  "description": "Schema for run reports emitted by SDLC agents. Each agent step writes a run report JSON file to signal completion to the orchestrator.",
+  "type": "object",
+  "required": [
+    "schema",
+    "run_id",
+    "step_id",
+    "agent",
+    "status",
+    "started_at",
+    "ended_at"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "run_report@v0",
+      "description": "Schema version identifier. Must be 'run_report@v0' for this schema version."
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for the orchestrator run. Used to correlate all steps in a single workflow execution."
+    },
+    "step_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier for the workflow step. Matches the 'id' field in the workflow YAML definition."
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name of the agent that executed this step (e.g., 'coding', 'work_planner', 'code_review')."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["COMPLETED", "FAILED"],
+      "description": "Completion status of the step. 'COMPLETED' indicates success; 'FAILED' indicates the step could not complete successfully."
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp when the step started execution. Must be timezone-aware (e.g., '2025-09-30T12:00:00Z')."
+    },
+    "ended_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp when the step finished execution. Must be timezone-aware (e.g., '2025-09-30T12:05:42Z')."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": [],
+      "description": "List of file paths to artifacts produced by this step. Paths should be relative to the repository root."
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": true,
+      "default": {},
+      "description": "Key-value pairs of metrics collected during step execution (e.g., tokens_in, tokens_out, duration_ms)."
+    },
+    "logs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": [],
+      "description": "List of log messages describing actions taken during the step. Must contain concrete summaries, not placeholder text."
+    },
+    "next_suggested_steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Optional suggestions for follow-up steps or actions. Informational only; does not affect workflow execution."
+    },
+    "gate_failure": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, triggers the loop_back_to target if configured on the step. Used for quality gate failures that require rework."
+    },
+    "memory_updates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/MemoryUpdate"
+      },
+      "default": [],
+      "description": "List of memory updates to persist in AGENTS.md files. Used to record learned knowledge for future agent runs."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "MemoryUpdate": {
+      "type": "object",
+      "required": ["scope", "section", "entry"],
+      "properties": {
+        "scope": {
+          "type": "string",
+          "description": "Relative path to target directory for the AGENTS.md file (e.g., 'src/api' or '.' for root)."
+        },
+        "section": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Section name in the AGENTS.md file (e.g., 'Gotchas', 'Patterns')."
+        },
+        "entry": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The content to add to the specified section."
+        }
+      },
+      "additionalProperties": false,
+      "description": "A single memory update to be written to an AGENTS.md file."
+    }
+  }
+}
