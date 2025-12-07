@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h1 class="page-title">Run Explorer</h1>
+            <p class="page-subtitle">Browse and search all workflow runs</p>
+        </div>
+        <div class="time-range">
+            <a href="/runs?days=7" class="{{ 'active' if selected_days == 7 else '' }}">7 days</a>
+            <a href="/runs?days=14" class="{{ 'active' if selected_days == 14 else '' }}">14 days</a>
+            <a href="/runs?days=30" class="{{ 'active' if selected_days == 30 else '' }}">30 days</a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    {% if runs %}
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Run ID</th>
+                    <th>Date</th>
+                    <th>Workflow</th>
+                    <th>Status</th>
+                    <th>Cost</th>
+                    <th>Steps</th>
+                    <th>Started</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in runs %}
+                <tr>
+                    <td>
+                        <a href="/runs/{{ run.run_id }}" class="run-id">{{ run.run_id[:8] }}</a>
+                    </td>
+                    <td style="color: var(--text-secondary);">{{ run.date }}</td>
+                    <td>{{ run.workflow_name }}</td>
+                    <td>
+                        <span class="status {{ run.status|status_class }}">
+                            {{ run.status|status_emoji }} {{ run.status }}
+                        </span>
+                    </td>
+                    <td>{{ run.total_cost_usd|format_cost }}</td>
+                    <td>
+                        {% if run.steps_failed > 0 %}
+                        <span style="color: var(--accent-green);">{{ run.steps_completed }}</span> /
+                        <span style="color: var(--accent-red);">{{ run.steps_failed }}</span>
+                        {% else %}
+                        {{ run.steps_completed }}
+                        {% endif %}
+                    </td>
+                    <td style="color: var(--text-secondary); font-size: 13px;">
+                        {{ run.started_at[:16] if run.started_at else '-' }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">&#x1F4AD;</div>
+        <p>No runs found in the last {{ selected_days }} days</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

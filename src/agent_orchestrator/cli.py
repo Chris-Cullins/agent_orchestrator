@@ -382,6 +382,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="Working directory for trigger scripts (default: current directory)",
     )
 
+    # Web dashboard subcommand
+    web_parser = subparsers.add_parser("web", help="Start the web dashboard server")
+    web_parser.add_argument(
+        "--repo",
+        default=".",
+        help="Path to the target repository (default: current directory)",
+    )
+    web_parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="Port to run the server on (default: 8080)",
+    )
+    web_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind to (default: 127.0.0.1)",
+    )
+    web_parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Don't automatically open the browser",
+    )
+    web_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode with hot reload",
+    )
+
     return parser
 
 
@@ -474,6 +503,52 @@ def poll_from_args(args: argparse.Namespace) -> None:
         _LOG.info("Poll complete. Triggered: %d, Failed: %d", triggered_count, failed_count)
 
 
+def web_from_args(args: argparse.Namespace) -> None:
+    """Handle the web subcommand."""
+    import webbrowser
+
+    try:
+        import uvicorn
+    except ImportError:
+        raise SystemExit(
+            "uvicorn is required for the web dashboard. "
+            "Install with: pip install uvicorn"
+        )
+
+    try:
+        from .web import create_app
+    except ImportError as exc:
+        raise SystemExit(
+            f"Failed to import web module: {exc}. "
+            "Make sure fastapi and jinja2 are installed: pip install fastapi jinja2"
+        )
+
+    repo_dir = Path(args.repo).expanduser().resolve()
+    if not repo_dir.exists():
+        raise SystemExit(f"Repository directory does not exist: {repo_dir}")
+
+    app = create_app(repo_dir)
+    url = f"http://{args.host}:{args.port}"
+
+    print(f"\n  Agent Orchestrator Dashboard")
+    print(f"  ============================")
+    print(f"  Repository: {repo_dir}")
+    print(f"  URL: {url}")
+    print(f"\n  Press Ctrl+C to stop the server\n")
+
+    # Open browser unless --no-browser is specified
+    if not args.no_browser:
+        webbrowser.open(url)
+
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        reload=args.debug,
+        log_level="info" if args.debug else "warning",
+    )
+
+
 def main(argv: Optional[list[str]] = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -489,6 +564,8 @@ def main(argv: Optional[list[str]] = None) -> None:
         stats_from_args(args)
     elif args.command == "poll":
         poll_from_args(args)
+    elif args.command == "web":
+        web_from_args(args)
     else:  # pragma: no cover - defensive
         parser.error(f"Unknown command {args.command}")
 
