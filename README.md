@@ -553,10 +553,42 @@ python -m agent_orchestrator.cli run \
   --skip-cleanup
 ```
 
+**Run Archive for Historical Tracking:**
+
+When runs are cleaned up, their metadata is automatically preserved in a lightweight SQLite database at `.agents/run_archive.db`. This allows you to:
+- Track all-time costs and token usage across all runs (including deleted ones)
+- View historical run data in the web dashboard
+- Query archived runs via the API
+
+The archive database is created automatically on first use - no setup required. Each archived run stores:
+- Run ID, workflow name, and status
+- Total cost, input/output tokens
+- Steps completed/failed counts
+- Work summary (which steps ran)
+- Timestamps (created, ended, archived)
+
+View archived runs in the web dashboard:
+- **Dashboard**: Shows "All-Time Totals (Archived Runs)" section
+- **Run Explorer**: Filter by source (All / Live / Archived)
+- **Run Detail**: View archived run metadata (step details not preserved)
+
+API endpoints for archived data:
+```bash
+# Get archive statistics
+curl http://localhost:8080/api/archive/stats
+
+# Get all archived runs
+curl http://localhost:8080/api/archive/runs
+
+# Get runs with source filter
+curl "http://localhost:8080/api/runs?source=archived"
+```
+
 **Best practices:**
 - Failed runs are preserved by default for post-mortem analysis - review them promptly before count-based cleanup removes them
 - Use `--skip-cleanup` when investigating issues across multiple runs
 - The cleanup settings (48 hours, 10 runs) are currently hardcoded; adjust the source if your workflow needs different retention
+- The archive database grows slowly (one row per run) - no maintenance needed
 
 ### Step 6: Customizing Agent Behavior with Prompt Overrides
 
@@ -1330,6 +1362,7 @@ steps:
   - `state.py` — Execution state persistence
   - `reporting.py` — Run report validation and parsing
   - `run_cleanup.py` — Automatic run directory cleanup with time and count-based retention
+  - `run_archive.py` — SQLite-based archive for preserving run metadata after cleanup
   - `time_utils.py` — Timezone-aware timestamp helpers shared across the orchestrator
   - `gating.py` — Conditional workflow progression
   - `memory.py` — Persistent agent memory via AGENTS.md files

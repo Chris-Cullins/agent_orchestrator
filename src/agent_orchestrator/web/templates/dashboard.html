@@ -145,4 +145,35 @@
         </div>
     </div>
 </div>
+
+<!-- All-time totals (including archived) -->
+{% if archive_stats and archive_stats.total_runs > 0 %}
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2 class="card-title">All-Time Totals (Archived Runs)</h2>
+    </div>
+    <div class="stats-grid" style="margin-bottom: 0;">
+        <div class="stat-card" style="background: transparent; border: none; padding: 0;">
+            <div class="stat-value" style="font-size: 24px; color: var(--text-secondary);">{{ archive_stats.total_runs }}</div>
+            <div class="stat-label">Archived Runs</div>
+        </div>
+        <div class="stat-card" style="background: transparent; border: none; padding: 0;">
+            <div class="stat-value" style="font-size: 24px; color: var(--accent-yellow);">{{ archive_stats.total_cost_usd|format_cost }}</div>
+            <div class="stat-label">Archived Cost</div>
+        </div>
+        <div class="stat-card" style="background: transparent; border: none; padding: 0;">
+            <div class="stat-value" style="font-size: 24px; color: var(--accent-blue);">{{ (archive_stats.total_input_tokens + archive_stats.total_output_tokens)|format_tokens }}</div>
+            <div class="stat-label">Archived Tokens</div>
+        </div>
+        <div class="stat-card" style="background: transparent; border: none; padding: 0;">
+            <div class="stat-value" style="font-size: 24px; color: var(--text-muted);">{{ archive_stats.total_steps_completed + archive_stats.total_steps_failed }}</div>
+            <div class="stat-label">Archived Steps</div>
+        </div>
+    </div>
+    <p style="color: var(--text-muted); font-size: 13px; margin-top: 12px; text-align: center;">
+        These runs have been cleaned up but their metadata is preserved.
+        <a href="/runs?source=archived" style="color: var(--accent-blue);">View archived runs</a>
+    </p>
+</div>
+{% endif %}
 {% endblock %}

@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 
+from .run_archive import RunArchive, extract_run_metadata
+
 _LOG = logging.getLogger(__name__)
 
 # Default retention settings
@@ -146,12 +148,16 @@ def _is_run_active(run_dir: Path) -> bool:
 def cleanup_old_runs(
     runs_dir: Path,
     max_age_hours: int = DEFAULT_MAX_AGE_HOURS,
+    archive: Optional[RunArchive] = None,
+    daily_stats_dir: Optional[Path] = None,
 ) -> List[str]:
     """Remove runs older than the specified age, excluding failed runs.
 
     Args:
         runs_dir: Path to the .agents/runs directory
         max_age_hours: Maximum age in hours before a run is eligible for deletion
+        archive: Optional RunArchive instance to save run metadata before deletion
+        daily_stats_dir: Optional path to daily stats for cost lookup
 
     Returns:
         List of deleted run_ids
@@ -174,6 +180,11 @@ def cleanup_old_runs(
         # Check age
         if run.age > max_age:
             try:
+                # Archive run metadata before deletion
+                if archive:
+                    metadata = extract_run_metadata(run.path, daily_stats_dir)
+                    archive.archive_run(**metadata)
+
                 shutil.rmtree(run.path)
                 deleted.append(run.run_id)
                 _LOG.info(
@@ -193,6 +204,8 @@ def cleanup_old_runs(
 def enforce_run_limit(
     runs_dir: Path,
     max_runs: int = DEFAULT_MAX_RUNS,
+    archive: Optional[RunArchive] = None,
+    daily_stats_dir: Optional[Path] = None,
 ) -> List[str]:
     """Enforce maximum run count by removing oldest runs.
 
@@ -202,6 +215,8 @@ def enforce_run_limit(
     Args:
         runs_dir: Path to the .agents/runs directory
         max_runs: Maximum number of run directories to keep
+        archive: Optional RunArchive instance to save run metadata before deletion
+        daily_stats_dir: Optional path to daily stats for cost lookup
 
     Returns:
         List of deleted run_ids
@@ -231,6 +246,11 @@ def enforce_run_limit(
 
     for run in deletable_runs[:delete_count]:
         try:
+            # Archive run metadata before deletion
+            if archive:
+                metadata = extract_run_metadata(run.path, daily_stats_dir)
+                archive.archive_run(**metadata)
+
             shutil.rmtree(run.path)
             deleted.append(run.run_id)
             _LOG.info(
@@ -252,6 +272,7 @@ def cleanup_runs(
     repo_path: Path,
     max_age_hours: int = DEFAULT_MAX_AGE_HOURS,
     max_runs: int = DEFAULT_MAX_RUNS,
+    enable_archive: bool = True,
 ) -> List[str]:
     """Main entry point for run cleanup.
 
@@ -259,27 +280,35 @@ def cleanup_runs(
     1. Time-based: Remove runs older than max_age_hours (excluding failed runs)
     2. Count-based: If still over max_runs, remove oldest (including failed)
 
+    Before deleting, run metadata is archived to a SQLite database for
+    historical tracking.
+
     Args:
         repo_path: Path to the repository root
         max_age_hours: Maximum age in hours for time-based cleanup
         max_runs: Maximum number of runs to keep
+        enable_archive: Whether to archive run metadata before deletion
 
     Returns:
         Combined list of all deleted run_ids
     """
     runs_dir = repo_path / ".agents" / "runs"
+    daily_stats_dir = repo_path / ".agents" / "daily_stats"
 
     if not runs_dir.exists():
         _LOG.debug("No runs directory at %s, skipping cleanup", runs_dir)
         return []
 
+    # Create archive for preserving run metadata
+    archive = RunArchive(repo_path) if enable_archive else None
+
     deleted: List[str] = []
 
     # Phase 1: Time-based cleanup
-    deleted.extend(cleanup_old_runs(runs_dir, max_age_hours))
+    deleted.extend(cleanup_old_runs(runs_dir, max_age_hours, archive, daily_stats_dir))
 
     # Phase 2: Count-based cleanup
-    deleted.extend(enforce_run_limit(runs_dir, max_runs))
+    deleted.extend(enforce_run_limit(runs_dir, max_runs, archive, daily_stats_dir))
 
     if deleted:
         _LOG.info("Run cleanup complete: removed %d run(s)", len(deleted))

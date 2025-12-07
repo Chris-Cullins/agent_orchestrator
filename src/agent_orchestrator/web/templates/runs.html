@@ -2,18 +2,42 @@
 
 {% block content %}
 <div class="page-header">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
         <div>
             <h1 class="page-title">Run Explorer</h1>
             <p class="page-subtitle">Browse and search all workflow runs</p>
         </div>
-        <div class="time-range">
-            <a href="/runs?days=7" class="{{ 'active' if selected_days == 7 else '' }}">7 days</a>
-            <a href="/runs?days=14" class="{{ 'active' if selected_days == 14 else '' }}">14 days</a>
-            <a href="/runs?days=30" class="{{ 'active' if selected_days == 30 else '' }}">30 days</a>
+        <div style="display: flex; gap: 16px; align-items: center;">
+            <div class="time-range">
+                <a href="/runs?days=7&source={{ selected_source }}" class="{{ 'active' if selected_days == 7 else '' }}">7 days</a>
+                <a href="/runs?days=14&source={{ selected_source }}" class="{{ 'active' if selected_days == 14 else '' }}">14 days</a>
+                <a href="/runs?days=30&source={{ selected_source }}" class="{{ 'active' if selected_days == 30 else '' }}">30 days</a>
+            </div>
+            <div class="time-range">
+                <a href="/runs?days={{ selected_days }}&source=all" class="{{ 'active' if selected_source == 'all' else '' }}">All</a>
+                <a href="/runs?days={{ selected_days }}&source=live" class="{{ 'active' if selected_source == 'live' else '' }}">Live</a>
+                <a href="/runs?days={{ selected_days }}&source=archived" class="{{ 'active' if selected_source == 'archived' else '' }}">Archived</a>
+            </div>
         </div>
     </div>
 </div>
+
+{% if archive_stats and archive_stats.total_runs > 0 and selected_source in ['all', 'archived'] %}
+<div class="stats-grid" style="margin-bottom: 16px;">
+    <div class="stat-card" style="padding: 12px;">
+        <div class="stat-value" style="font-size: 20px;">{{ archive_stats.total_runs }}</div>
+        <div class="stat-label" style="font-size: 11px;">Archived Runs</div>
+    </div>
+    <div class="stat-card" style="padding: 12px;">
+        <div class="stat-value cost" style="font-size: 20px;">{{ archive_stats.total_cost_usd|format_cost }}</div>
+        <div class="stat-label" style="font-size: 11px;">Archived Cost</div>
+    </div>
+    <div class="stat-card" style="padding: 12px;">
+        <div class="stat-value" style="font-size: 20px;">{{ (archive_stats.total_input_tokens + archive_stats.total_output_tokens)|format_tokens }}</div>
+        <div class="stat-label" style="font-size: 11px;">Archived Tokens</div>
+    </div>
+</div>
+{% endif %}
 
 <div class="card">
     {% if runs %}
@@ -32,9 +56,12 @@
             </thead>
             <tbody>
                 {% for run in runs %}
-                <tr>
+                <tr style="{{ 'opacity: 0.7;' if run.source == 'archived' else '' }}">
                     <td>
                         <a href="/runs/{{ run.run_id }}" class="run-id">{{ run.run_id[:8] }}</a>
+                        {% if run.source == 'archived' %}
+                        <span style="font-size: 10px; color: var(--text-muted); margin-left: 4px;" title="Archived run - original files cleaned up">&#128230;</span>
+                        {% endif %}
                     </td>
                     <td style="color: var(--text-secondary);">{{ run.date }}</td>
                     <td>{{ run.workflow_name }}</td>
@@ -63,7 +90,13 @@
     {% else %}
     <div class="empty-state">
         <div class="empty-state-icon">&#x1F4AD;</div>
+        {% if selected_source == 'archived' %}
+        <p>No archived runs found</p>
+        {% elif selected_source == 'live' %}
+        <p>No live runs found in the last {{ selected_days }} days</p>
+        {% else %}
         <p>No runs found in the last {{ selected_days }} days</p>
+        {% endif %}
     </div>
     {% endif %}
 </div>
