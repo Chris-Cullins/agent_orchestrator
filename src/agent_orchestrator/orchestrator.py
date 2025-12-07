@@ -115,10 +115,16 @@ class Orchestrator:
 
         self._active_processes: Dict[str, StepLaunch] = {}
         self._memory_manager = MemoryManager(repo_dir=repo_dir, logger=self._log)
+        self._run_status: Optional[str] = None  # Set after run() completes
 
     @property
     def run_id(self) -> str:
         return self._state.run_id
+
+    @property
+    def run_succeeded(self) -> bool:
+        """Return True if the run completed successfully (no terminal failures)."""
+        return self._run_status == "COMPLETED"
 
     def run(self) -> None:
         self._log.info(
@@ -179,6 +185,8 @@ class Orchestrator:
             self._cleanup_processes()
             self._persist_state()
             self._stop_notifications()
+            # Store run status for external access
+            self._run_status = run_status
             # Record run end in daily stats
             self._daily_stats.record_run_end(self._state.run_id, run_status)
             # Log daily summary

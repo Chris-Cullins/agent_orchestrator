@@ -215,12 +215,28 @@ def run_from_args(args: argparse.Namespace) -> None:
     finally:
         if worktree_manager and worktree_handle:
             run_id = orchestrator.run_id if orchestrator else worktree_handle.run_id
-            if args.git_worktree_keep:
-                _LOG.info(
-                    "Git worktree preserved at %s (branch %s)",
-                    worktree_handle.path,
-                    worktree_handle.branch,
-                )
+            run_succeeded = orchestrator.run_succeeded if orchestrator else False
+
+            # Preserve worktree if explicitly requested OR if run failed (for debugging/resume)
+            should_preserve = args.git_worktree_keep or not run_succeeded
+
+            if should_preserve:
+                if not run_succeeded:
+                    _LOG.warning(
+                        "Run failed - preserving git worktree for debugging/resume at %s (branch %s)",
+                        worktree_handle.path,
+                        worktree_handle.branch,
+                    )
+                    _LOG.info(
+                        "To resume: python -m agent_orchestrator.cli run --repo %s --workflow <workflow> --wrapper <wrapper> --start-at-step <failed_step>",
+                        worktree_handle.path,
+                    )
+                else:
+                    _LOG.info(
+                        "Git worktree preserved at %s (branch %s)",
+                        worktree_handle.path,
+                        worktree_handle.branch,
+                    )
             else:
                 try:
                     destination = persist_worktree_outputs(
