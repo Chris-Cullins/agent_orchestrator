@@ -104,6 +104,41 @@
     </div>
 </div>
 
+<!-- Cost by Step -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h2 class="card-title">Cost by Step ({{ selected_days }} days)</h2>
+    </div>
+    {% if cost_by_step %}
+    <div class="grid-2" style="gap: 24px;">
+        <div>
+            <div class="cost-breakdown" style="margin-top: 16px;">
+                {% set step_total = cost_by_step.values()|sum or 0.0001 %}
+                {% for step_id, cost in cost_by_step.items() %}
+                <div class="cost-item">
+                    <span class="cost-label" style="width: 140px; font-size: 13px;">{{ step_id }}</span>
+                    <div class="cost-bar">
+                        <div class="cost-bar-fill" style="width: {{ (cost / step_total * 100)|round(1) }}%; background: linear-gradient(90deg, #58a6ff, #a371f7);"></div>
+                    </div>
+                    <span class="cost-amount">{{ cost|format_cost }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div>
+            <div class="chart-container" style="height: 280px;">
+                <canvas id="stepCostChart"></canvas>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">&#x1F4CA;</div>
+        <p>No step cost data available</p>
+    </div>
+    {% endif %}
+</div>
+
 <script>
     const chartData = {{ chart_data|safe }};
 
@@ -250,6 +285,58 @@
                     plugins: {
                         legend: {
                             position: 'right'
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // Step cost pie chart
+    const stepCostChartEl = document.getElementById('stepCostChart');
+    if (stepCostChartEl) {
+        const stepData = {{ cost_by_step|tojson|safe if cost_by_step else '{}' }};
+        const stepLabels = Object.keys(stepData);
+        const stepValues = Object.values(stepData);
+
+        // Generate colors for each step
+        const stepColors = [
+            '#58a6ff', '#a371f7', '#3fb950', '#d29922', '#f85149',
+            '#8b949e', '#79c0ff', '#d2a8ff', '#7ee787', '#e3b341',
+        ];
+
+        if (stepLabels.length > 0) {
+            new Chart(stepCostChartEl, {
+                type: 'pie',
+                data: {
+                    labels: stepLabels,
+                    datasets: [{
+                        data: stepValues,
+                        backgroundColor: stepLabels.map((_, i) => stepColors[i % stepColors.length]),
+                        borderWidth: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 8,
+                                font: { size: 11 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `$${value.toFixed(2)} (${percentage}%)`;
+                                }
+                            }
                         }
                     }
                 }

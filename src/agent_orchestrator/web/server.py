@@ -75,6 +75,9 @@ def create_app(repo_dir: Path) -> FastAPI:
         # Get today's stats for model breakdown
         today_stats = tracker.get_daily_stats()
 
+        # Get cost breakdown by step ID
+        cost_by_step = get_cost_by_step(stats_list)
+
         return templates.TemplateResponse(
             "analytics.html",
             {
@@ -82,6 +85,7 @@ def create_app(repo_dir: Path) -> FastAPI:
                 "stats_list": stats_list,
                 "chart_data": json.dumps(chart_data),
                 "today_stats": today_stats,
+                "cost_by_step": cost_by_step,
                 "selected_days": days,
                 "page_title": "Cost Analytics",
             },
@@ -276,6 +280,23 @@ def prepare_chart_data(stats_list: List[DailyStats]) -> Dict[str, Any]:
         "tokens_input": tokens_input,
         "tokens_output": tokens_output,
     }
+
+
+def get_cost_by_step(stats_list: List[DailyStats]) -> Dict[str, float]:
+    """Aggregate cost by step ID across all stats."""
+    cost_by_step: Dict[str, float] = {}
+
+    for stats in stats_list:
+        for step in stats.steps:
+            step_id = step.get("step_id", "unknown")
+            cost = step.get("cost_usd", 0.0)
+            cost_by_step[step_id] = cost_by_step.get(step_id, 0.0) + cost
+
+    # Sort by cost descending
+    sorted_steps = dict(
+        sorted(cost_by_step.items(), key=lambda x: x[1], reverse=True)
+    )
+    return sorted_steps
 
 
 def get_all_runs(tracker: DailyStatsTracker, days: int) -> List[Dict[str, Any]]:
