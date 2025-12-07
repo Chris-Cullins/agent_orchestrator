@@ -7,6 +7,9 @@
             <h1 class="page-title">
                 <a href="/runs" style="color: var(--text-secondary);">Runs</a> /
                 <span class="run-id">{{ run_id[:8] }}</span>
+                {% if is_archived %}
+                <span style="font-size: 14px; color: var(--text-muted); margin-left: 8px;" title="Archived run">&#128230; Archived</span>
+                {% endif %}
             </h1>
             <p class="page-subtitle">
                 {{ run_info.workflow_name }} -
@@ -55,10 +58,12 @@
                 <td style="color: var(--text-secondary); border: none;">Workflow</td>
                 <td style="border: none;">{{ run_info.workflow_name }}</td>
             </tr>
+            {% if not is_archived %}
             <tr>
                 <td style="color: var(--text-secondary); border: none;">Date</td>
                 <td style="border: none;">{{ run_info.date }}</td>
             </tr>
+            {% endif %}
             <tr>
                 <td style="color: var(--text-secondary); border: none;">Started</td>
                 <td style="border: none;">{{ run_info.started_at if run_info.started_at else '-' }}</td>
@@ -67,6 +72,18 @@
                 <td style="color: var(--text-secondary); border: none;">Ended</td>
                 <td style="border: none;">{{ run_info.ended_at if run_info.ended_at else '-' }}</td>
             </tr>
+            {% if is_archived %}
+            <tr>
+                <td style="color: var(--text-secondary); border: none;">Archived</td>
+                <td style="border: none; color: var(--text-muted);">{{ run_info.archived_at[:16] if run_info.archived_at else '-' }}</td>
+            </tr>
+            {% if run_info.work_summary %}
+            <tr>
+                <td style="color: var(--text-secondary); border: none;">Summary</td>
+                <td style="border: none;">{{ run_info.work_summary }}</td>
+            </tr>
+            {% endif %}
+            {% endif %}
         </table>
     </div>
 
@@ -91,6 +108,22 @@
                 <td style="border: none;">{{ total_duration|format_duration }}</td>
             </tr>
         </table>
+        {% elif is_archived %}
+        <table style="border: none;">
+            <tr>
+                <td style="color: var(--text-secondary); width: 120px; border: none;">Total Steps</td>
+                <td style="border: none;">{{ run_info.steps_completed + run_info.steps_failed }}</td>
+            </tr>
+            {% if run_info.total_input_tokens or run_info.total_output_tokens %}
+            <tr>
+                <td style="color: var(--text-secondary); border: none;">Total Tokens</td>
+                <td style="border: none;">{{ (run_info.total_input_tokens + run_info.total_output_tokens)|format_tokens }}</td>
+            </tr>
+            {% endif %}
+        </table>
+        <p style="color: var(--text-muted); font-size: 12px; margin-top: 8px;">
+            Detailed step data not available for archived runs.
+        </p>
         {% else %}
         <p style="color: var(--text-secondary);">No step details available</p>
         {% endif %}
@@ -124,6 +157,14 @@
             </div>
         </div>
         {% endfor %}
+    </div>
+    {% elif is_archived %}
+    <div class="empty-state">
+        <div class="empty-state-icon">&#128230;</div>
+        <p>This run has been archived. Detailed step data is no longer available.</p>
+        {% if run_info.work_summary %}
+        <p style="color: var(--text-secondary); margin-top: 8px;">{{ run_info.work_summary }}</p>
+        {% endif %}
     </div>
     {% else %}
     <div class="empty-state">

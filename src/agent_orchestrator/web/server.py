@@ -21,6 +21,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from ..daily_stats import DailyStats, DailyStatsTracker
+from ..run_archive import ArchivedRun, RunArchive
 from ..workflow import load_workflow, WorkflowLoadError
 
 _LOG = logging.getLogger(__name__)
@@ -66,6 +67,7 @@ def create_app(repo_dir: Path) -> FastAPI:
     # Store repo_dir in app state
     app.state.repo_dir = repo_dir
     app.state.stats_tracker = DailyStatsTracker(repo_dir)
+    app.state.run_archive = RunArchive(repo_dir)
 
     # Setup templates and static files
     web_dir = Path(__file__).parent
@@ -84,10 +86,14 @@ def create_app(repo_dir: Path) -> FastAPI:
     async def dashboard(request: Request):
         """Dashboard home page with today's stats and recent runs."""
         tracker: DailyStatsTracker = app.state.stats_tracker
+        archive: RunArchive = app.state.run_archive
         today_stats = tracker.get_daily_stats()
 
         # Get recent runs (last 10)
         recent_runs = get_recent_runs(today_stats)
+
+        # Get archive stats for all-time totals
+        archive_stats = archive.get_archive_stats()
 
         return templates.TemplateResponse(
             "dashboard.html",
@@ -95,6 +101,7 @@ def create_app(repo_dir: Path) -> FastAPI:
                 "request": request,
                 "stats": today_stats,
                 "recent_runs": recent_runs,
+                "archive_stats": archive_stats,
                 "page_title": "Dashboard",
             },
         )
@@ -130,10 +137,56 @@ def create_app(repo_dir: Path) -> FastAPI:
 
     # Run explorer page
     @app.get("/runs", response_class=HTMLResponse)
-    async def runs_list(request: Request, days: int = 7):
-        """Run explorer - list of all runs."""
+    async def runs_list(request: Request, days: int = 7, source: str = "all"):
+        """Run explorer - list of all runs.
+
+        Args:
+            days: Number of days to look back for live runs
+            source: Filter runs - 'all', 'live', or 'archived'
+        """
         tracker: DailyStatsTracker = app.state.stats_tracker
-        all_runs = get_all_runs(tracker, days)
+        archive: RunArchive = app.state.run_archive
+
+        all_runs = []
+
+        # Get set of archived run IDs to exclude from "live" list
+        # (archived means the run was cleaned up, so it's not really live)
+        archived_run_ids = {r.run_id for r in archive.get_all_archived_runs()}
+
+        # Get live runs from daily stats
+        if source in ("all", "live"):
+            live_runs = get_all_runs(tracker, days)
+            for run in live_runs:
+                # Skip if this run was archived (cleaned up)
+                if run["run_id"] in archived_run_ids:
+                    continue
+                run["source"] = "live"
+                all_runs.append(run)
+
+        # Get archived runs
+        if source in ("all", "archived"):
+            archived_runs = archive.get_all_archived_runs()
+            for run in archived_runs:
+                all_runs.append({
+                    "run_id": run.run_id,
+                    "date": run.created_at[:10] if run.created_at else "",
+                    "workflow_name": run.workflow_name,
+                    "status": run.status,
+                    "total_cost_usd": run.total_cost_usd,
+                    "steps_completed": run.steps_completed,
+                    "steps_failed": run.steps_failed,
+                    "started_at": run.created_at,
+                    "ended_at": run.ended_at or "",
+                    "source": "archived",
+                    "work_summary": run.work_summary,
+                    "archived_at": run.archived_at,
+                })
+
+        # Sort by started_at descending
+        all_runs.sort(key=lambda x: x.get("started_at", ""), reverse=True)
+
+        # Get archive stats for the header
+        archive_stats = archive.get_archive_stats()
 
         return templates.TemplateResponse(
             "runs.html",
@@ -141,6 +194,8 @@ def create_app(repo_dir: Path) -> FastAPI:
                 "request": request,
                 "runs": all_runs,
                 "selected_days": days,
+                "selected_source": source,
+                "archive_stats": archive_stats,
                 "page_title": "Run Explorer",
             },
         )
@@ -211,22 +266,45 @@ def create_app(repo_dir: Path) -> FastAPI:
         """Run detail page showing steps and metrics."""
         repo_dir: Path = app.state.repo_dir
         tracker: DailyStatsTracker = app.state.stats_tracker
+        archive: RunArchive = app.state.run_archive
 
         # Get run info from stats
         run_info = get_run_info(tracker, run_id)
-        if not run_info:
-            return templates.TemplateResponse(
-                "error.html",
-                {
-                    "request": request,
-                    "error": f"Run {run_id} not found",
-                    "page_title": "Error",
-                },
-                status_code=404,
-            )
+        is_archived = False
+        steps = []
 
-        # Get step details from run state if available
-        steps = get_run_steps(repo_dir, run_id, tracker)
+        if not run_info:
+            # Check the archive
+            archived_run = archive.get_archived_run(run_id)
+            if archived_run:
+                is_archived = True
+                run_info = {
+                    "run_id": archived_run.run_id,
+                    "workflow_name": archived_run.workflow_name,
+                    "status": archived_run.status,
+                    "total_cost_usd": archived_run.total_cost_usd,
+                    "steps_completed": archived_run.steps_completed,
+                    "steps_failed": archived_run.steps_failed,
+                    "started_at": archived_run.created_at,
+                    "ended_at": archived_run.ended_at,
+                    "work_summary": archived_run.work_summary,
+                    "archived_at": archived_run.archived_at,
+                    "total_input_tokens": archived_run.total_input_tokens,
+                    "total_output_tokens": archived_run.total_output_tokens,
+                }
+            else:
+                return templates.TemplateResponse(
+                    "error.html",
+                    {
+                        "request": request,
+                        "error": f"Run {run_id} not found",
+                        "page_title": "Error",
+                    },
+                    status_code=404,
+                )
+        else:
+            # Get step details from run state if available
+            steps = get_run_steps(repo_dir, run_id, tracker)
 
         return templates.TemplateResponse(
             "run_detail.html",
@@ -235,6 +313,7 @@ def create_app(repo_dir: Path) -> FastAPI:
                 "run_id": run_id,
                 "run_info": run_info,
                 "steps": steps,
+                "is_archived": is_archived,
                 "page_title": f"Run {run_id[:8]}",
             },
         )
@@ -254,10 +333,48 @@ def create_app(repo_dir: Path) -> FastAPI:
         return [s.to_dict() for s in stats_list]
 
     @app.get("/api/runs")
-    async def api_runs(days: int = 7):
-        """Get all runs for date range."""
+    async def api_runs(days: int = 7, source: str = "all"):
+        """Get all runs for date range, including archived."""
         tracker: DailyStatsTracker = app.state.stats_tracker
-        return get_all_runs(tracker, days)
+        archive: RunArchive = app.state.run_archive
+
+        all_runs = []
+
+        # Get set of archived run IDs to exclude from "live" list
+        archived_run_ids = {r.run_id for r in archive.get_all_archived_runs()}
+
+        if source in ("all", "live"):
+            live_runs = get_all_runs(tracker, days)
+            for run in live_runs:
+                # Skip if this run was archived (cleaned up)
+                if run["run_id"] in archived_run_ids:
+                    continue
+                run["source"] = "live"
+                all_runs.append(run)
+
+        if source in ("all", "archived"):
+            archived_runs = archive.get_all_archived_runs()
+            for run in archived_runs:
+                all_runs.append({
+                    **run.to_dict(),
+                    "source": "archived",
+                })
+
+        all_runs.sort(key=lambda x: x.get("started_at", x.get("created_at", "")), reverse=True)
+        return all_runs
+
+    @app.get("/api/archive/stats")
+    async def api_archive_stats():
+        """Get archived runs statistics."""
+        archive: RunArchive = app.state.run_archive
+        return archive.get_archive_stats()
+
+    @app.get("/api/archive/runs")
+    async def api_archive_runs(limit: Optional[int] = None, offset: int = 0):
+        """Get archived runs with pagination."""
+        archive: RunArchive = app.state.run_archive
+        runs = archive.get_all_archived_runs(limit=limit, offset=offset)
+        return [r.to_dict() for r in runs]
 
     # ============================================================
     # New Run UI - Workflow Discovery and Execution
