@@ -300,6 +300,162 @@ SKIP_SYSTEMCTL=1 ./src/agent_orchestrator/scripts/install_systemd_timer.sh insta
 - Clean rerun: disable the timer, remove `.agents/systemd-logs/<unit>` if desired, then reinstall with new settings
 - Smoke test: run the installer with `SKIP_SYSTEMCTL=1 --start-now` to confirm files and command lines without enabling timers
 
+### Polling Service: Watch External Sources and Trigger Workflows
+
+The orchestrator includes a **polling service** that watches external sources (GitHub issues, with extensibility for Jira and others) and automatically triggers workflows when conditions are met. This is ideal for automating issue-driven development workflows.
+
+#### How It Works
+
+1. Configure poll sources in a YAML file (labels to watch, scripts to run)
+2. Run the poller periodically via systemd timer
+3. Poller finds items matching criteria (e.g., GitHub issues with `ready-for-agent` label)
+4. Adds a "processed" label to prevent re-triggering
+5. Executes configured bash script with context (issue number, URL, etc.)
+
+#### Poll Configuration Format
+
+Create a poll configuration file (e.g., `config/poll_config.yaml`):
+
+```yaml
+# Poll configuration for GitHub issues
+sources:
+  - type: github_issues
+    repo: owner/repo  # Or set GITHUB_REPOSITORY env var
+    filter:
+      # Issues must have ALL of these labels
+      labels:
+        - "ready-for-agent"
+      # Issues must NOT have any of these labels
+      exclude_labels:
+        - "wip"
+        - "blocked"
+      # Only open issues (default)
+      state: open
+    # Label added after triggering to prevent re-processing
+    processed_label: "agent-processing"
+    # What to run when a matching issue is found
+    on_match:
+      script: ./scripts/trigger_issue_workflow.sh
+      # Additional environment variables passed to the script
+      env:
+        WORKFLOW: src/agent_orchestrator/workflows/workflow_github_issue.yaml
+        WRAPPER: src/agent_orchestrator/wrappers/claude_wrapper.py
+        DAILY_COST_LIMIT: "50.00"
+```
+
+#### Running the Poller
+
+```bash
+# Run once (default behavior for systemd timer)
+python -m agent_orchestrator.cli poll --config config/poll_config.yaml
+
+# Dry run - show what would be triggered without executing
+python -m agent_orchestrator.cli poll --config config/poll_config.yaml --dry-run
+
+# Specify working directory for script execution
+python -m agent_orchestrator.cli poll --config config/poll_config.yaml --workdir /path/to/repo
+```
+
+#### Environment Variables Passed to Scripts
+
+When a trigger script runs, it receives these environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `POLL_SOURCE_TYPE` | Source type (e.g., "github_issues") |
+| `POLL_ITEM_ID` | Item identifier (e.g., issue number) |
+| `POLL_ITEM_URL` | Full URL to the item |
+| `POLL_REPO` | Repository (for GitHub sources) |
+| `ISSUE_NUMBER` | Same as `POLL_ITEM_ID` (GitHub-specific) |
+| Plus any vars from `on_match.env` | Custom variables from config |
+
+#### Example Trigger Script
+
+```bash
+#!/bin/bash
+# scripts/trigger_issue_workflow.sh
+set -e
+
+echo "Triggering workflow for issue #${ISSUE_NUMBER}"
+echo "  Source: ${POLL_SOURCE_TYPE}"
+echo "  URL: ${POLL_ITEM_URL}"
+
+python3 -m agent_orchestrator.cli run \
+  --repo . \
+  --workflow "${WORKFLOW}" \
+  --wrapper "${WRAPPER}" \
+  --issue-number "${ISSUE_NUMBER}" \
+  --git-worktree \
+  --git-worktree-branch "feat/issue-${ISSUE_NUMBER}" \
+  --daily-cost-limit "${DAILY_COST_LIMIT:-50.00}" \
+  --cost-limit-action warn \
+  --log-level INFO
+```
+
+#### Systemd Timer for Polling
+
+Set up periodic polling with systemd:
+
+**`/etc/systemd/user/agent-poll.service`**
+```ini
+[Unit]
+Description=Agent Orchestrator Polling Service
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/repo
+ExecStart=/path/to/venv/bin/python -m agent_orchestrator.cli poll --config ./config/poll_config.yaml
+Environment=GITHUB_TOKEN=your-token-here
+```
+
+**`/etc/systemd/user/agent-poll.timer`**
+```ini
+[Unit]
+Description=Run Agent Orchestrator Polling every 5 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable and start:
+```bash
+systemctl --user daemon-reload
+systemctl --user enable agent-poll.timer
+systemctl --user start agent-poll.timer
+```
+
+#### Extending to Other Sources
+
+The polling service uses a plugin architecture. To add new sources (e.g., Jira):
+
+1. Create a new class implementing the `PollSource` abstract base class
+2. Register it in `src/agent_orchestrator/polling/__init__.py`
+
+```python
+from .sources.base import PollSource
+
+class JiraPollSource(PollSource):
+    def poll(self, config: PollSourceConfig) -> List[TriggerEvent]:
+        # Implement Jira polling logic
+        pass
+
+    def mark_processed(self, event: TriggerEvent, config: PollSourceConfig) -> None:
+        # Implement marking item as processed
+        pass
+
+# Register in __init__.py
+POLL_SOURCES = {
+    "github_issues": GitHubIssuePollSource,
+    "jira": JiraPollSource,  # Add new source
+}
+```
+
 #### Resume a Failed Workflow Run
 
 If a workflow fails at a specific step, you can resume it from that step without re-running completed steps:
